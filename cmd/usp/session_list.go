@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 	"hop.top/kit/output"
+	"hop.top/usp/internal/sessionutil"
 	"hop.top/usp/session"
 )
 
@@ -25,7 +25,7 @@ type sessionRow struct {
 func sessionListCmd() *cobra.Command {
 	var (
 		project string
-		tool     string
+		tool    string
 		since   string
 		limit   int
 		format  string
@@ -35,20 +35,19 @@ func sessionListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List sessions across all supported CLIs",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			// Empty project = all projects.
-			adapters := filterAdapters(allAdapters(), tool)
+			adapters := sessionutil.FilterAdapters(allAdapters(), tool)
 			if adapters == nil {
 				return fmt.Errorf("unknown CLI %q", tool)
 			}
 
-			sinceTime, err := parseSince(since)
+			sinceTime, err := sessionutil.ParseSince(since)
 			if err != nil {
 				return fmt.Errorf("invalid --since: %w", err)
 			}
 
-			all := collectSessions(adapters, project)
-			all = filterSince(all, sinceTime)
-			all = sortAndLimit(all, limit)
+			all := sessionutil.CollectSessions(adapters, project)
+			all = sessionutil.FilterSince(all, sinceTime)
+			all = sessionutil.SortAndLimit(all, limit)
 
 			if len(all) == 0 {
 				fmt.Fprintln(os.Stderr, "No sessions found.")
@@ -75,7 +74,7 @@ func sessionListCmd() *cobra.Command {
 func sessionSearchCmd() *cobra.Command {
 	var (
 		project string
-		tool     string
+		tool    string
 		since   string
 		limit   int
 		format  string
@@ -88,20 +87,19 @@ func sessionSearchCmd() *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			query := strings.ToLower(args[0])
 
-			adapters := filterAdapters(allAdapters(), tool)
+			adapters := sessionutil.FilterAdapters(allAdapters(), tool)
 			if adapters == nil {
 				return fmt.Errorf("unknown CLI %q", tool)
 			}
 
-			sinceTime, err := parseSince(since)
+			sinceTime, err := sessionutil.ParseSince(since)
 			if err != nil {
 				return fmt.Errorf("invalid --since: %w", err)
 			}
 
-			all := collectSessions(adapters, project)
-			all = filterSince(all, sinceTime)
+			all := sessionutil.CollectSessions(adapters, project)
+			all = sessionutil.FilterSince(all, sinceTime)
 
-			// Filter by content match via StreamTurns.
 			var matched []session.Session
 			adapterMap := allAdapters()
 			for _, s := range all {
@@ -118,7 +116,6 @@ func sessionSearchCmd() *cobra.Command {
 						strings.ToLower(turn.Content), query,
 					) {
 						matched = append(matched, s)
-						// Drain remaining turns.
 						for range ch {
 						}
 						break
@@ -126,7 +123,7 @@ func sessionSearchCmd() *cobra.Command {
 				}
 			}
 
-			matched = sortAndLimit(matched, limit)
+			matched = sessionutil.SortAndLimit(matched, limit)
 
 			if len(matched) == 0 {
 				fmt.Fprintln(os.Stderr, "No matching sessions.")
@@ -150,59 +147,7 @@ func sessionSearchCmd() *cobra.Command {
 	return cmd
 }
 
-// --- shared helpers ---
-
-func filterAdapters(
-	all map[string]session.SessionAdapter, tool string,
-) map[string]session.SessionAdapter {
-	if tool == "" {
-		return all
-	}
-	a, ok := all[tool]
-	if !ok {
-		return nil
-	}
-	return map[string]session.SessionAdapter{tool: a}
-}
-
-func collectSessions(
-	adapters map[string]session.SessionAdapter, project string,
-) []session.Session {
-	var all []session.Session
-	for _, a := range adapters {
-		sessions, err := a.ListSessions(project)
-		if err != nil {
-			continue
-		}
-		all = append(all, sessions...)
-	}
-	return all
-}
-
-func filterSince(
-	ss []session.Session, since time.Time,
-) []session.Session {
-	if since.IsZero() {
-		return ss
-	}
-	filtered := ss[:0]
-	for _, s := range ss {
-		if !s.StartedAt.Before(since) {
-			filtered = append(filtered, s)
-		}
-	}
-	return filtered
-}
-
-func sortAndLimit(ss []session.Session, limit int) []session.Session {
-	sort.Slice(ss, func(i, j int) bool {
-		return ss[i].StartedAt.After(ss[j].StartedAt)
-	})
-	if limit > 0 && len(ss) > limit {
-		ss = ss[:limit]
-	}
-	return ss
-}
+// --- display helpers (not shared — UI-specific) ---
 
 func toRows(ss []session.Session) []sessionRow {
 	rows := make([]sessionRow, len(ss))
@@ -217,42 +162,6 @@ func toRows(ss []session.Session) []sessionRow {
 		}
 	}
 	return rows
-}
-
-// parseSince parses duration shorthand (7d, 24h, 30m) or date
-// (2026-04-01). Returns zero time if input is empty.
-func parseSince(s string) (time.Time, error) {
-	if s == "" {
-		return time.Time{}, nil
-	}
-	// Try duration shorthand: Nd, Nh, Nm.
-	if len(s) >= 2 {
-		unit := s[len(s)-1]
-		val := s[:len(s)-1]
-		var n int
-		if _, err := fmt.Sscanf(val, "%d", &n); err == nil {
-			switch unit {
-			case 'd':
-				return time.Now().Add(-time.Duration(n) * 24 * time.Hour), nil
-			case 'h':
-				return time.Now().Add(-time.Duration(n) * time.Hour), nil
-			case 'm':
-				return time.Now().Add(-time.Duration(n) * time.Minute), nil
-			}
-		}
-	}
-	// Try date formats.
-	for _, layout := range []string{
-		"2006-01-02",
-		"2006-01-02T15:04:05",
-		time.RFC3339,
-	} {
-		if t, err := time.Parse(layout, s); err == nil {
-			return t, nil
-		}
-	}
-	return time.Time{}, fmt.Errorf(
-		"expected duration (7d, 24h) or date (2026-04-01), got %q", s)
 }
 
 func truncateID(id string, max int) string {

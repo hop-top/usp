@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -40,9 +41,12 @@ func setupSharedHome(t *testing.T) (
 	if err := os.MkdirAll(filepath.Dir(pj), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	data, _ := json.Marshal(map[string]any{
+	data, err := json.Marshal(map[string]any{
 		"projects": map[string]string{sharedCwd: "shared-project"},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(pj, data, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -149,15 +153,16 @@ func TestMultiCliSessionSharing(t *testing.T) {
 		}
 	}
 
-	// Gemini may return 0 or 1 from ListSessions depending on
-	// whether transcripts are present; tolerate both.
+	// Gemini InjectSession writes a .json file, so ListSessions must find it.
 	gemSessions, err := geminiA.ListSessions(sharedCwd)
 	if err != nil {
 		t.Fatalf("gemini list: %v", err)
 	}
-	gemCount := len(gemSessions)
-	if gemCount > 1 {
-		t.Fatalf("gemini sessions = %d, want 0 or 1", gemCount)
+	if len(gemSessions) != 1 {
+		t.Fatalf("gemini sessions = %d, want 1", len(gemSessions))
+	}
+	if gemSessions[0].ID != geminiID {
+		t.Errorf("gemini session ID = %q, want %q", gemSessions[0].ID, geminiID)
 	}
 
 	// Aggregate across all adapters (unified view).
@@ -170,10 +175,8 @@ func TestMultiCliSessionSharing(t *testing.T) {
 		all = append(all, ss...)
 	}
 
-	// 3 guaranteed + gemini (0 or 1).
-	wantMin, wantMax := 3, 4
-	if len(all) < wantMin || len(all) > wantMax {
-		t.Fatalf("aggregate sessions = %d, want %d-%d", len(all), wantMin, wantMax)
+	if len(all) != 4 {
+		t.Fatalf("aggregate sessions = %d, want 4", len(all))
 	}
 
 	// Every session shares the same project cwd.
@@ -276,7 +279,10 @@ func TestMultiCliResumeChainSharing(t *testing.T) {
 	// 5. List across all adapters — 4 native sessions.
 	var all []session.Session
 	for _, a := range []session.SessionAdapter{claudeA, codexA, geminiA, ocA} {
-		ss, _ := a.ListSessions(sharedCwd)
+		ss, err := a.ListSessions(sharedCwd)
+		if err != nil {
+			t.Fatalf("ListSessions(%s): %v", a.CLI(), err)
+		}
 		all = append(all, ss...)
 	}
 	if len(all) != 4 {
@@ -336,5 +342,17 @@ func TestMultiCliResumeChainSharing(t *testing.T) {
 	// the original seed content (possibly lossy but present).
 	if ocTurns[0].Content == "" {
 		t.Error("opencode first turn has empty content")
+	}
+	// Verify seed content propagated through the chain.
+	foundSeed := false
+	for _, turn := range ocTurns {
+		if strings.Contains(turn.Content, "create HTTP server") ||
+			strings.Contains(turn.Content, "HTTP server") {
+			foundSeed = true
+			break
+		}
+	}
+	if !foundSeed {
+		t.Error("seed content 'HTTP server' not found in opencode turns — propagation failed")
 	}
 }

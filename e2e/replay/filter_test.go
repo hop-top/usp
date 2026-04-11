@@ -36,7 +36,9 @@ func sortAndLimit(ss []session.Session, limit int) []session.Session {
 	return ss
 }
 
-// parseSince mirrors cmd/usp.parseSince.
+// parseSince mirrors cmd/usp.parseSince. Mirrored because cmd/usp
+// is package main (not importable). TODO: extract to internal/cmdhelpers
+// to avoid drift between this copy and the real implementation.
 func parseSince(s string) (time.Time, error) {
 	if s == "" {
 		return time.Time{}, nil

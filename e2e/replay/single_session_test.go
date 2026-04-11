@@ -229,9 +229,12 @@ func testOpenCodeLifecycle(t *testing.T) {
 		{"msg-r3", "user", "check logs", now + 4000},
 	}
 	for _, m := range msgs {
-		data, _ := json.Marshal(map[string]string{
+		data, err := json.Marshal(map[string]string{
 			"role": m.role, "content": m.text,
 		})
+		if err != nil {
+			t.Fatalf("marshal message: %v", err)
+		}
 		if _, err := db.Exec(
 			`INSERT INTO message (id,session_id,data,created_at)
 			 VALUES (?,?,?,?)`,
@@ -262,6 +265,16 @@ func verifyLifecycle(
 	}
 	if len(sessions) == 0 {
 		t.Fatal("ListSessions returned 0 sessions")
+	}
+	found := false
+	for _, s := range sessions {
+		if s.ID == wantID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("ListSessions did not contain session %q", wantID)
 	}
 
 	// 2. GetSession

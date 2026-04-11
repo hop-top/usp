@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"hop.top/kit/cli"
+	"hop.top/usp/internal/xrrutil"
 )
 
 var version = "dev"
@@ -16,6 +18,11 @@ func main() {
 		Short:   "Universal Sessions Protocol — cross-CLI session management",
 		Accent:  "#7C5CFF",
 	})
+
+	if xrrutil.Active() {
+		fmt.Fprintf(os.Stderr, "xrr: mode=%s cassette_dir=%s\n",
+			xrrutil.Mode(), xrrutil.CassetteDir())
+	}
 
 	root.Cmd.AddCommand(
 		sessionCmd(root),

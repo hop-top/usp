@@ -85,5 +85,4 @@ ENV XRR_CASSETTE_DIR="/cassettes"
 
 WORKDIR /src/usp
 
-ENTRYPOINT ["go", "test", "-v", "-count=1", "-tags", "docker"]
-CMD ["./e2e/docker/..."]
+CMD ["go", "test", "-v", "-count=1", "-tags", "docker", "./e2e/docker/..."]

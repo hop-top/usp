@@ -65,7 +65,7 @@ func doctorCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&cliFlag, "cli", "",
+	cmd.Flags().StringVar(&cliFlag, "tool", "",
 		"Check a single CLI (e.g. claude, codex)")
 	return cmd
 }

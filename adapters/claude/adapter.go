@@ -69,14 +69,42 @@ func (a *Adapter) storeRoot() (string, error) {
 	return filepath.Join(home, ".claude", "projects"), nil
 }
 
-// ListSessions returns all sessions found under the project key dir.
+// ListSessions returns sessions for the given cwd. When cwd is empty,
+// returns sessions across ALL projects.
 func (a *Adapter) ListSessions(cwd string) ([]session.Session, error) {
 	root, err := a.storeRoot()
 	if err != nil {
 		return nil, err
 	}
 
-	projDir := filepath.Join(root, a.ProjectKey(cwd))
+	if cwd == "" {
+		return a.listAllProjects(root)
+	}
+
+	return a.listProject(root, a.ProjectKey(cwd), cwd)
+}
+
+func (a *Adapter) listAllProjects(root string) ([]session.Session, error) {
+	dirs, err := os.ReadDir(root)
+	if err != nil {
+		return nil, err
+	}
+	var all []session.Session
+	for _, d := range dirs {
+		if !d.IsDir() {
+			continue
+		}
+		sessions, err := a.listProject(root, d.Name(), "")
+		if err != nil {
+			continue
+		}
+		all = append(all, sessions...)
+	}
+	return all, nil
+}
+
+func (a *Adapter) listProject(root, key, cwd string) ([]session.Session, error) {
+	projDir := filepath.Join(root, key)
 	entries, err := os.ReadDir(projDir)
 	if err != nil {
 		return nil, err
@@ -90,7 +118,7 @@ func (a *Adapter) ListSessions(cwd string) ([]session.Session, error) {
 		id := strings.TrimSuffix(e.Name(), ".jsonl")
 		s, err := a.parseSession(filepath.Join(projDir, e.Name()), id, cwd)
 		if err != nil {
-			continue // partial results on error
+			continue
 		}
 		sessions = append(sessions, *s)
 	}

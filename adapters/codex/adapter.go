@@ -194,7 +194,10 @@ func (a *Adapter) listFromIndex(root, cwd string) ([]session.Session, error) {
 			continue
 		}
 		meta, n, err := readSessionFile(path)
-		if err != nil || meta.Payload.CWD != cwd {
+		if err != nil {
+			continue
+		}
+		if cwd != "" && meta.Payload.CWD != cwd {
 			continue
 		}
 		s := metaToSession(meta, n)
@@ -213,7 +216,10 @@ func (a *Adapter) listFromWalk(root, cwd string) ([]session.Session, error) {
 			return nil
 		}
 		meta, n, err := readSessionFile(p)
-		if err != nil || meta.Payload.CWD != cwd {
+		if err != nil {
+			return nil
+		}
+		if cwd != "" && meta.Payload.CWD != cwd {
 			return nil
 		}
 		out = append(out, *metaToSession(meta, n))

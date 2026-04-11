@@ -75,9 +75,37 @@ func (a *Adapter) ProjectKey(cwd string) string {
 // Returns empty (not error) when the dir contains only .project_root
 // markers — this is the expected real-world case as of 2026-04-11.
 func (a *Adapter) ListSessions(cwd string) ([]session.Session, error) {
-	alias := a.ProjectKey(cwd)
-	histDir := filepath.Join(a.geminiRoot(), "history", alias)
+	histRoot := filepath.Join(a.geminiRoot(), "history")
 
+	if cwd == "" {
+		return a.listAllAliases(histRoot)
+	}
+
+	alias := a.ProjectKey(cwd)
+	return a.listAlias(histRoot, alias, cwd)
+}
+
+func (a *Adapter) listAllAliases(histRoot string) ([]session.Session, error) {
+	dirs, err := os.ReadDir(histRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var all []session.Session
+	for _, d := range dirs {
+		if !d.IsDir() {
+			continue
+		}
+		sessions, _ := a.listAlias(histRoot, d.Name(), "")
+		all = append(all, sessions...)
+	}
+	return all, nil
+}
+
+func (a *Adapter) listAlias(histRoot, alias, cwd string) ([]session.Session, error) {
+	histDir := filepath.Join(histRoot, alias)
 	entries, err := os.ReadDir(histDir)
 	if err != nil {
 		if os.IsNotExist(err) {

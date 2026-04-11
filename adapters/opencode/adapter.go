@@ -97,18 +97,28 @@ func (a *Adapter) ListSessions(cwd string) ([]session.Session, error) {
 	}
 	defer db.Close()
 
-	projectID := a.ProjectKey(cwd)
-
-	rows, err := db.Query(`
-		SELECT s.id, s.title, s.created_at, s.updated_at,
-			COUNT(m.id) AS turn_count
-		FROM session s
-		LEFT JOIN message m ON m.session_id = s.id
-		WHERE s.project_id = ?
-		GROUP BY s.id
-		ORDER BY s.created_at DESC`,
-		projectID,
-	)
+	var rows *sql.Rows
+	if cwd == "" {
+		rows, err = db.Query(`
+			SELECT s.id, s.title, s.created_at, s.updated_at,
+				COUNT(m.id) AS turn_count
+			FROM session s
+			LEFT JOIN message m ON m.session_id = s.id
+			GROUP BY s.id
+			ORDER BY s.created_at DESC`)
+	} else {
+		projectID := a.ProjectKey(cwd)
+		rows, err = db.Query(`
+			SELECT s.id, s.title, s.created_at, s.updated_at,
+				COUNT(m.id) AS turn_count
+			FROM session s
+			LEFT JOIN message m ON m.session_id = s.id
+			WHERE s.project_id = ?
+			GROUP BY s.id
+			ORDER BY s.created_at DESC`,
+			projectID,
+		)
+	}
 	if err != nil {
 		return nil, nil // table might not exist yet
 	}

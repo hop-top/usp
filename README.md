@@ -30,15 +30,60 @@ usp doctor               # what's installed, what's readable
 usp install              # index detected CLIs
 usp session list         # all sessions, all CLIs, sorted
 usp session show <id>    # full session detail
+usp session search auth  # find sessions mentioning "auth"
 ```
 
 ### Flags
 
 ```sh
---cli claude             # narrow to one assistant
+--tool claude            # narrow to one assistant
 --project /path/to/x     # explicit working directory
+--since 7d               # sessions from the last 7 days
 --limit 10               # cap results
 --format json            # json | yaml | table
+```
+
+## Sample output
+
+### `usp session list --since 2d`
+
+```
+ID             CLI     PROJECT                    STARTED  TURNS
+8c470754-d69…  claude  ~/projects/tlc             1h ago   32
+34534e3e-210…  claude  ~/projects/uhp             1h ago   499
+827d6683-2f5…  claude  ~/projects/kit             1h ago   292
+33ba162b-1e9…  claude  ~/projects/usp             2h ago   649
+41c697cf-1f4…  claude  ~/projects/tep             4h ago   95
+3f937c7d-7db…  claude  ~/projects/kit             5h ago   374
+d6607e6d-d91…  claude  ~/projects/tip             10h ago  1919
+cfe5b6d0-9a2…  claude  ~/projects/xray            21h ago  13
+af1242d5-1c1…  claude  ~/projects/xray            21h ago  458
+5f11d831-882…  claude  ~/skills                   22h ago  801
+db43cfac-543…  claude  ~/projects/xray            1d ago   93
+fe2eb947-eca…  claude  ~/projects/tlc             1d ago   142
+```
+
+### `usp session show fe2eb947-eca…`
+
+```
+Session: fe2eb947-ecab-4293-a26c-3485062e8e6a
+CLI:     claude
+Project: ~/projects/tlc
+Started: 2026-04-10 04:40:25
+Ended:   2026-04-10 05:08:20
+Turns:   142
+
+Turn 1 [system] 2026-04-10 04:40:25
+
+Turn 2 [user] 2026-04-10 04:40:26
+  ❯ tlc init libc_darwin.go:224: ...
+
+Turn 3 [assistant] 2026-04-10 04:40:29
+  That looks like a panic or crash in `tlc init`. Let me...
+  Tool calls: Bash
+
+Turn 4 [assistant] 2026-04-10 04:40:30
+  Tool calls: Bash
 ```
 
 ## Supported CLIs

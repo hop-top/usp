@@ -12,7 +12,7 @@ func TestSessionListCmd_Flags(t *testing.T) {
 		t.Fatalf("Use = %q, want %q", cmd.Use, "list")
 	}
 
-	for _, name := range []string{"project", "cli", "limit", "format"} {
+	for _, name := range []string{"project", "tool", "since", "limit", "format"} {
 		if cmd.Flags().Lookup(name) == nil {
 			t.Errorf("missing flag %q", name)
 		}

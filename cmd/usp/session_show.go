@@ -128,7 +128,7 @@ func sessionShowCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&cliFlag, "cli", "", "Restrict search to a specific CLI adapter")
+	cmd.Flags().StringVar(&cliFlag, "tool", "", "Restrict search to a specific CLI")
 	return cmd
 }
 

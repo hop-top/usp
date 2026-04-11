@@ -23,13 +23,13 @@ Envelope fields: `xrr`, `adapter`, `fingerprint`,
 
 ```
 e2e/cassettes/
-  combo-latest/          # all 4 CLIs at latest version
-    single_session/      # one provider, one session
-    cross_resume/        # resume across providers
-    filter_test/         # --since/--before/--last filters
-  combo-mixed/           # mixed CLI versions
+  latest/                # all 4 CLIs at latest version
+    single_session/      # one CLI, one session lifecycle
+    cross_resume/        # resume across CLIs
+    filter_test/         # --since/--tool/--project filters
+  mixed/                 # mixed CLI versions
     ...
-  combo-oldest/          # all 4 CLIs at oldest supported
+  oldest/                # all 4 CLIs at oldest supported
     ...
 ```
 
@@ -46,6 +46,8 @@ Cassettes land in `e2e/cassettes/<combo>/<scenario>/`.
 
 ## Replay
 
+Replay test package planned for Phase 3. Once available:
+
 ```sh
 XRR_MODE=replay go test ./e2e/replay/...
 ```
@@ -56,7 +58,7 @@ No network calls; xrr serves from cassette files.
 
 - CLI version bump (any of the 4 providers)
 - Scenario logic changes
-- Weekly CI refresh via `.github/workflows/e2e-record.yml`
+- Weekly CI refresh (Phase 4: automated workflow planned)
 
 ## Rules
 

@@ -7,7 +7,7 @@ import (
 func TestActiveUnset(t *testing.T) {
 	t.Setenv("XRR_MODE", "")
 	if Active() {
-		t.Fatal("Active() should be false when XRR_MODE is unset")
+		t.Fatal("Active() should be false when XRR_MODE is empty string")
 	}
 }
 

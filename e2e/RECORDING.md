@@ -54,7 +54,9 @@ ls e2e/cassettes/latest/single_session/
 Each interaction produces one `.req.yaml` + `.resp.yaml`
 pair. Missing pairs = failed recording.
 
-## 4. Replay Check
+## 4. Replay Check (Phase 3)
+
+Once replay tests exist:
 
 ```sh
 XRR_MODE=replay go test ./e2e/replay/... -v
@@ -69,9 +71,9 @@ git add e2e/cassettes/
 git commit -m "test(e2e): re-record cassettes"
 ```
 
-## 6. CI Auto-Recording
+## 6. CI Auto-Recording (Phase 4)
 
-Weekly workflow: `.github/workflows/e2e-record.yml`
+Planned weekly workflow (not yet created):
 
 - Builds all combos
 - Records all scenarios

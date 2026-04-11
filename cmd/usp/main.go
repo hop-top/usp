@@ -20,7 +20,8 @@ func main() {
 	})
 
 	if xrrutil.Active() {
-		fmt.Fprintf(os.Stderr, "xrr: mode=%s cassette_dir=%s\n",
+		fmt.Fprintf(root.Cmd.ErrOrStderr(),
+			"xrr: mode=%s cassette_dir=%s\n",
 			xrrutil.Mode(), xrrutil.CassetteDir())
 	}
 

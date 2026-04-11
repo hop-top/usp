@@ -1,60 +1,62 @@
 # OpenCode — Sessions Research Dossier
 
-> SHA1-hashed project keys + SQLite primary store with JSON file
-> mirror. Cleanest separation of session/message/part/todo concerns
-> of any CLI, but project reverse-lookup requires reading a JSON
-> sidecar per hash.
+> SHA1-hashed project keys + SQLite (Drizzle ORM) primary store
+> with JSON file mirror. Rich schema: sessions, messages, parts,
+> todos, workspaces, permissions, events, accounts. Project
+> reverse-lookup requires reading a JSON sidecar per hash.
 
-Last verified: 2026-04-08.
+Last verified: 2026-04-11.
 
 ## Summary
 
-- **Primary store:** `~/.local/share/opencode/opencode.db` (SQLite, ~270MB typical)
-- **Mirror store:** `~/.local/share/opencode/storage/<kind>/<project-hash>/`
+- **Primary store:** `~/.local/share/opencode/opencode.db`
+  (SQLite via Drizzle ORM, ~272MB typical)
+- **Mirror store:** `~/.local/share/opencode/storage/<kind>/`
 - **Project key:** SHA1 hex of absolute cwd (40 chars)
-- **Project metadata:** `storage/project/<hash>.json` (worktree, vcs, timestamps)
-- **Session file:** `storage/session/<project-hash>/ses_<id>.json`
-- **Message/part split:** separate `message/` and `part/` dirs per session
+- **Project metadata:** `storage/project/<hash>.json`
+  (worktree, vcs, timestamps)
+- **Session file:**
+  `storage/session/<project-hash>/ses_<id>.json`
+- **Message/part split:** `message/<ses-id>/msg_*` and
+  `part/<msg-id>/prt_*` (parts nest under message, not session)
 - **Resume:** TUI session picker; `opencode --session <id>`
 - **Platform:** macOS + Linux + Windows
 
 ## Sources
 
 - Sessions docs: <https://opencode.ai/docs/sessions/>
-- Storage reference: <https://deepwiki.com/sst/opencode/storage>
+- Storage reference:
+  <https://deepwiki.com/sst/opencode/storage>
 - Plugins SDK: <https://opencode.ai/docs/plugins/>
 
 ## Layout
 
 ```pseudocode
 ~/.local/share/opencode/
-├── opencode.db                            # SQLite primary (sessions+messages+parts)
+├── opencode.db                  # SQLite primary (Drizzle ORM)
 ├── opencode.db-shm
 ├── opencode.db-wal
 ├── auth.json
-├── migration                              # schema version marker
+├── bin/                         # bundled binaries
+├── snapshot/                    # content snapshots (ROOT level)
+│   └── <project-hash>/         # per-project snapshot dirs
 ├── storage/
+│   ├── migration                # schema version marker (integer)
 │   ├── project/
-│   │   ├── 4e2f4754d19ed904f11553caadcd97fca696dcaa.json
-│   │   ├── 5b788e42594b6300c1df079e07652c19da2cade6.json
-│   │   └── ...                            # one JSON per project hash
+│   │   ├── <hash>.json          # one JSON per project hash
+│   │   └── ...
 │   ├── session/
-│   │   ├── 4e2f4754d19ed904f11553caadcd97fca696dcaa/
-│   │   │   ├── ses_3a8bb9976ffe9A5l1tEw0rtiBJ.json
-│   │   │   ├── ses_40cd6ce5dffeCVqGe9YTN0WT28.json
-│   │   │   └── ...
-│   │   └── <other-hash>/
+│   │   └── <project-hash>/
+│   │       ├── ses_<id>.json
+│   │       └── ...
 │   ├── message/
 │   │   └── <session-id>/
 │   │       └── msg_*.json
 │   ├── part/
-│   │   └── <session-id>/
+│   │   └── <message-id>/        # keyed by msg ID, not ses ID
 │   │       └── prt_*.json
-│   ├── session_diff/                      # computed diffs per session
-│   ├── todo/
-│   │   └── <session-id>/
-│   │       └── todo_*.json
-│   └── snapshot/                          # git-like content snapshots
+│   ├── session_diff/            # flat ses_*.json files
+│   └── todo/                    # flat ses_*.json files
 ├── log/
 ├── plans/
 └── tool-output/
@@ -89,30 +91,50 @@ Last verified: 2026-04-08.
 
 ## Session ID format
 
-- Pattern: `ses_<26-char-base32-ulid-ish>`
-- Example: `ses_3a8bb9976ffe9A5l1tEw0rtiBJ`
+- Pattern: `ses_<26-char-mixed-case-alphanum>`
+- Example: `ses_41a008b58ffeqNcmm2m48ptgWD`
 - Time-ordered (ULID-family), globally unique
+- Mixed-case alphanumeric (not strictly base32)
 - Nested under project hash dir for filesystem locality
 
-## Data model — 5-way split
+## Data model — SQLite schema (Drizzle ORM)
 
-OpenCode is the only CLI that splits session state across 5 distinct
-kinds:
+SQLite is canonical; filesystem mirrors for tooling/debug.
+Schema managed by Drizzle ORM (`__drizzle_migrations` table).
 
-| Kind          | Path                              | Purpose                          |
-|---------------|-----------------------------------|----------------------------------|
-| `project`     | `storage/project/<hash>.json`     | cwd + vcs metadata               |
-| `session`     | `storage/session/<hash>/ses_*`    | session header + title + state   |
-| `message`     | `storage/message/<ses-id>/msg_*`  | user/assistant messages          |
-| `part`        | `storage/part/<ses-id>/prt_*`     | message parts (streaming chunks) |
-| `todo`        | `storage/todo/<ses-id>/todo_*`    | todo list state                  |
-| `session_diff`| `storage/session_diff/`           | computed code diffs per session  |
-| `snapshot`    | `storage/snapshot/`               | content-addressed file snapshots |
+### Core tables
 
-- SQLite holds canonical data; filesystem mirror for tooling/debug
-- Rehydrating a session = load session.json + all msg_* + all prt_*
-  + all todo_* joined by session_id
-- `session_diff/` and `snapshot/` are unique: code-aware provenance
+| Table            | Key columns (beyond id/timestamps)                                                   |
+|------------------|--------------------------------------------------------------------------------------|
+| `project`        | `worktree`, `vcs`, `name`, `icon_url`, `icon_color`, `sandboxes`, `commands`         |
+| `session`        | `project_id` FK, `parent_id`, `slug`, `directory`, `title`, `version`, `share_url`,  |
+|                  | `summary_additions/deletions/files/diffs`, `revert`, `permission`, `workspace_id`    |
+| `message`        | `session_id` FK (CASCADE), `data` JSON blob                                          |
+| `part`           | `message_id` FK (CASCADE), `session_id`, `data` JSON blob                            |
+| `todo`           | `session_id` FK (CASCADE), `content`, `status`, `priority`, `position` (composite PK)|
+| `permission`     | `project_id` FK (CASCADE), `data` JSON blob                                          |
+| `workspace`      | `project_id` FK, `branch`, `type`, `name`, `directory`, `extra`                      |
+| `session_share`  | `session_id` FK, `secret`, `url`                                                     |
+| `account`        | `email`, `url`, `access_token`, `refresh_token`, `token_expiry`                      |
+| `account_state`  | singleton; `active_account_id` FK, `active_org_id`                                   |
+| `control_account`| legacy/parallel auth; `email`+`url` composite PK                                     |
+| `event_sequence` | `aggregate_id` PK, `seq`                                                             |
+| `event`          | `aggregate_id` FK, `seq`, `type`, `data` — event-sourcing support                    |
+
+### Filesystem mirror kinds
+
+| Kind           | Path                              | Structure                          |
+|----------------|-----------------------------------|------------------------------------|
+| `project`      | `storage/project/<hash>.json`     | one JSON per project               |
+| `session`      | `storage/session/<hash>/ses_*`    | session header per project dir     |
+| `message`      | `storage/message/<ses-id>/msg_*`  | msgs nested under session          |
+| `part`         | `storage/part/<msg-id>/prt_*`     | parts nested under MESSAGE id      |
+| `todo`         | `storage/todo/ses_*.json`         | flat files, not nested dirs        |
+| `session_diff` | `storage/session_diff/ses_*.json` | flat files, diffs per session      |
+| `snapshot`     | `snapshot/<project-hash>/`        | ROOT level, not under `storage/`   |
+
+- Rehydrating = session.json + msg_* + prt_* + todo joined by IDs
+- `snapshot/` and `session_diff/` provide code-aware provenance
 
 ## Resume / continue semantics
 
@@ -124,13 +146,16 @@ kinds:
 
 ## Strengths
 
-- Only CLI with SQLite primary store → fast queries across sessions
-- Only CLI with normalized project metadata (`project/<hash>.json`)
-  including vcs + timestamps
+- Only CLI with SQLite (Drizzle ORM) primary store → fast queries
+- Only CLI with normalized project metadata
+  (`project/<hash>.json`) including vcs + timestamps
 - Only CLI with message/part split → streaming-safe rehydration
 - Only CLI with native session diffs + content snapshots
-- Worktrees get distinct hashes cleanly (different cwd → different hash)
-- Per-session todo store is file-based and inspectable without SQL
+- Event-sourcing tables (`event`, `event_sequence`) suggest
+  future replay/audit capability
+- Workspace table enables multi-branch session isolation
+- Worktrees get distinct hashes (different cwd → different hash)
+- Per-session todo store is file-based + inspectable without SQL
 
 ## Known gotchas
 
@@ -138,43 +163,57 @@ kinds:
   reading the sidecar JSON or grepping the `worktree` field
 - **Two sources of truth:** SQLite is canonical, filesystem mirror
   can drift; USP must decide which to follow
-- `opencode.db` gets large (270MB+) — full scans are expensive;
+- `opencode.db` gets large (272MB+) — full scans are expensive;
   prefer indexed queries (session_id, project_hash)
-- No top-level project dir listing — must walk `storage/project/*.json`
-  and map cwd → hash
-- `storage/message/<session-id>/` is *not* nested under project hash —
-  flat per-session, so two projects can't share msg dirs by accident
-  but grouping requires joining on session_id
-- Schema can change between opencode versions; `migration` file
-  tracks current version but the SQLite schema isn't officially
-  documented
+- No top-level project dir listing — must walk
+  `storage/project/*.json` and map cwd → hash
+- **Part nesting is by message, not session** —
+  `storage/part/<msg-id>/prt_*.json`; grouping by session
+  requires joining through message table
+- **Todo and session_diff are flat** — `ses_*.json` files
+  directly in their dirs, not nested by session/project
+- **`snapshot/` lives at ROOT** — `~/.local/share/opencode/snapshot/`,
+  NOT under `storage/`; easy to miss
+- **`migration` lives under `storage/`** — not at root;
+  currently contains integer "2"
+- Schema managed by Drizzle ORM; can change between opencode
+  versions; not officially documented
 
 ## Open questions
 
-1. Is the SQLite schema documented anywhere, or must adapters
-   reverse-engineer via `sqlite3 .schema`?
+1. ~~Is SQLite schema documented?~~ No. Drizzle ORM manages it;
+   reverse-engineer via `sqlite3 .schema`
 2. Does filesystem mirror lag SQLite writes, or are they atomic?
 3. What does `session_diff` contain — per-turn diffs or
-   full-session diffs? Can USP reuse it for change attribution?
+   full-session diffs? Can USP reuse for change attribution?
 4. Are `snapshot/` entries content-addressed (CAS-style) and
    deduplicated across sessions?
 5. Does `time.initialized` differ from `time.created` because of
    lazy init, or does it track first prompt vs project creation?
+6. What is the `event`/`event_sequence` table used for — is this
+   an internal event bus or user-facing audit log?
+7. How does `workspace` relate to `session` — is it for
+   multi-branch or multi-directory workflows?
 
 ## Integration notes for USP
 
-OpenCode is mid-complexity. Strategy:
+OpenCode is mid-to-high complexity. Strategy:
 
 1. **Primary read path:** SQLite via read-only connection with
-   explicit schema version check against `migration` file
+   Drizzle migration version check (integer in
+   `storage/migration`)
 2. **Fallback / indexing:** walk `storage/project/*.json` to build
    hash → cwd map; use for discovery + sanity checks
-3. Watch `storage/session/<hash>/` and `storage/message/<id>/` with
-   fswatch for live tailing; SQLite WAL alternatively via
+3. Watch `storage/session/<hash>/` and `storage/message/<id>/`
+   with fswatch for live tailing; SQLite WAL alternatively via
    `PRAGMA wal_autocheckpoint`
-4. Translate OpenCode 5-way split to USP envelope by joining
-   session + message + part + todo into a unified event stream
-5. Respect SQLite as source of truth on conflict
+4. Translate OpenCode multi-table model to USP envelope by joining
+   session + message + part + todo into unified event stream
+5. Account for workspace/permission/event tables — they may
+   carry context needed for full session reconstruction
+6. Respect SQLite as source of truth on conflict
+7. Note `snapshot/` at root level when building file watchers
 
-Expected adapter size: ~500 LOC Go (SQLite reader + project index
-builder + multi-kind event joiner + fswatch bridge).
+Expected adapter size: ~600 LOC Go (SQLite reader + project index
+builder + multi-kind event joiner + workspace resolver +
+fswatch bridge).

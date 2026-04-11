@@ -4,14 +4,14 @@
 > central `projects.json`. Aliases collide across unrelated cwds,
 > making backward lookup (alias → path) unreliable without the map.
 
-Last verified: 2026-04-08.
+Last verified: 2026-04-11.
 
 ## Summary
 
 - **Store root:** `~/.gemini/history/<alias>/`
 - **Project map:** `~/.gemini/projects.json` (cwd → alias)
-- **Alias scheme:** basename of cwd, with numeric suffixes on collision
-  (`main`, `main-1`, `main-2`, ..., `main-15`)
+- **Alias scheme:** basename of cwd, numeric suffixes on collision
+  (`main`, `main-1`, ..., `main-N`; no upper bound observed)
 - **Transcript format:** per-chat JSON files + `.project_root` marker
 - **Resume CLI:** `gemini chat resume <tag>` / `/chat resume <tag>`
 - **Scope:** per-cwd; alias resolution via central map
@@ -27,23 +27,35 @@ Last verified: 2026-04-08.
 
 ```pseudocode
 ~/.gemini/
+├── AGENTS.md                         # user agent instructions
+├── GEMINI.md                         # user instructions (context)
 ├── projects.json                     # cwd → alias map (THE index)
 ├── history/
-│   ├── main/                         # alias for first seen "main" cwd
+│   ├── main/                         # alias for first "main" cwd
 │   │   ├── .project_root             # absolute path marker
 │   │   └── <chat-tag>.json           # per-saved-chat transcript
-│   ├── main-1/                       # second "main" (collision)
+│   ├── main-1/                       # collision → suffix N
 │   │   └── ...
-│   ├── main-15/                      # 16th collision
+│   ├── main-18/                      # observed up to N=18
 │   │   └── ...
 │   ├── ideacrafterslabs/             # unique basename
 │   ├── rania/
 │   ├── gstack/
 │   └── agent-skills/
 ├── settings.json
+├── settings.json.orig                # backup of original settings
+├── google_accounts.json              # linked Google accounts
 ├── oauth_creds.json
-├── state.json
-└── trustedFolders.json
+├── installation_id                   # unique install identifier
+├── mcp-oauth-tokens.json             # MCP server OAuth tokens
+├── mcp-oauth-tokens-v2.json          # v2 OAuth tokens
+├── mcp-server-enablement.json        # MCP server on/off config
+├── state.json                        # UI state (tips, banners)
+├── trustedFolders.json
+├── antigravity/                      # Antigravity IDE integration
+├── antigravity-browser-profile/      # browser profile for IDE
+├── skills/                           # Gemini CLI skills
+└── tmp/                              # temp workspace
 ```
 
 ## projects.json — the central map
@@ -51,25 +63,29 @@ Last verified: 2026-04-08.
 ```pseudocode
 {
   "projects": {
-    "/Users/jadb/.w/ideacrafterslabs/tlc/hops/main": "main",
-    "/Users/jadb/.w/ideacrafterslabs/clear": "clear",
-    "/Users/jadb/.w/ideacrafterslabs/clear/hops/main": "main-1",
-    "/Users/jadb/.w/ideacrafterslabs/owsf": "owsf",
-    "/Users/jadb/.w/ideacrafterslabs/wsm/hops/main": "main-2",
-    "/Users/jadb/.w/ideacrafterslabs/xray/hops/main": "main-4",
-    "/Users/jadb/.w/ideacrafterslabs/aps/hops/main": "main-7",
-    "/Users/jadb/.w/ideacrafterslabs/routellm/hops/main": "main-9",
-    "/Users/jadb/.w/ideacrafterslabs/eva/hops/main": "main-10",
-    ...
+    ".../tlc/hops/main": "main",
+    ".../clear": "clear",
+    ".../clear/hops/main": "main-1",
+    ".../owsf": "owsf",
+    ".../wsm/hops/main": "main-2",
+    ".../git/hops/main": "main-3",
+    ".../xray/hops/main": "main-4",
+    ".../aps/hops/main": "main-7",
+    ".../routellm/hops/main": "main-9",
+    ".../eva/hops/main": "main-10",
+    ".../uri/hops/main": "main-16",
+    ".../tip/hops/main": "main-17",
+    ".../gh-stars/hops/main": "main-18",
+    ...                          # 43 entries total (2026-04-11)
   }
 }
 ```
 
 - **Forward lookup** (cwd → alias): O(1) via map
 - **Backward lookup** (alias → cwd): must scan all values
-- Worktrees under `hops/main` all resolve to basename `main` → all
-  collide → `main-1`, `main-2`, ..., `main-15` assigned in first-seen
-  order
+- Worktrees under `hops/main` all resolve to basename `main` →
+  collide → `main-1` ... `main-18` assigned in first-seen order
+- No upper bound on suffix observed; counter increments unbounded
 - Alias order depends on discovery history; not stable across users
 
 ## Alias generation rules
@@ -98,6 +114,10 @@ def alias_for(cwd):
 - **Auto-save:** recent history retained as an implicit
   most-recent-chat; tag-less resume uses it
 - Format: JSON object with `history` array + metadata
+- **Note:** no chat transcript files observed on disk as of
+  2026-04-11; only `.project_root` markers present — suggests
+  `/chat save` has never been used, or transcripts are ephemeral
+  until explicitly saved
 
 ## Resume / continue semantics
 
@@ -108,6 +128,41 @@ def alias_for(cwd):
 - `/chat resume <tag>` — resume inside TUI
 - Resume is scoped to current cwd's alias by default; cross-project
   resume requires `--history-dir` override
+
+## settings.json — session retention
+
+```pseudocode
+{
+  "general": {
+    "sessionRetention": {
+      "enabled": true,
+      "maxAge": "30d",
+      "warningAcknowledged": true
+    }
+  },
+  "context": { "fileName": "AGENTS.md" },
+  ...
+}
+```
+
+- `sessionRetention.enabled` — opt-in persistent history
+- `maxAge` — retention window (e.g. "30d")
+- `context.fileName` — custom instructions file (default: GEMINI.md;
+  can be overridden to AGENTS.md or similar)
+- MCP server config also lives here (`mcpServers` key)
+
+## state.json — UI state (not session state)
+
+```pseudocode
+{
+  "defaultBannerShownCount": 4,
+  "tipsShown": 10,
+  "focusUiEnabled": false
+}
+```
+
+- Tracks UI state only; no session/chat metadata
+- Not useful for USP integration
 
 ## Coverage vs Claude Code
 
@@ -135,7 +190,7 @@ def alias_for(cwd):
 ## Known gotchas
 
 - **Basename collisions** are the dominant organizing principle
-  under `hops/main` worktree conventions — `main-15` conveys nothing
+  under `hops/main` worktree conventions — `main-18` conveys nothing
 - Alias is assigned once and never changes, even if cwd is renamed
   or moved — old alias keeps pointing at a dead path
 - `.project_root` can disagree with `projects.json` if either is
@@ -146,6 +201,9 @@ def alias_for(cwd):
   snapshot; losing a save loses that state
 - Trusted-folders gate (`trustedFolders.json`) can silently block
   chat history from being written for untrusted cwds
+- History dirs may contain ONLY `.project_root` with zero chat
+  files — unclear if transcripts require explicit `/chat save`
+  or if `sessionRetention` must be enabled first
 
 ## Open questions
 

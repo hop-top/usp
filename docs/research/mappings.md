@@ -5,14 +5,15 @@
 > format changes. Feeds USP adapter capability maps and
 > `usp doctor` output.
 
-Last verified: 2026-04-08.
+Last verified: 2026-04-11.
 
 ## Reference model: Claude Code
 
 Claude Code has the cleanest session layout: path-encoded project
 key + per-session append-only JSONL transcripts + optional memory
 subsystem. USP's session model is a superset of Claude's layout
-plus OpenCode's message/part/diff splits.
+plus OpenCode's message/part/diff splits (12-table Drizzle
+schema, not the earlier 5-way estimate).
 
 Source: <https://code.claude.com/docs/en/session-management>
 
@@ -37,11 +38,11 @@ Source: <https://code.claude.com/docs/en/session-management>
 |---------------------|--------------------------------------|-------------------------------------|------------------------------------|------------------------------------|
 | Store root          | `~/.claude/projects/`                | `~/.gemini/history/`                | `~/.codex/sessions/<Y>/<M>/<D>/`  | `~/.local/share/opencode/`         |
 | Project grouping    | ✅ per-cwd dir                        | ✅ per-alias dir                    | ❌ date-partitioned (no grouping)  | ✅ per-hash dir                     |
-| Project key         | slash-to-dash cwd                    | basename + suffix (via map)        | none (cwd in session_meta only)   | SHA1 hex of cwd                    |
+| Project key         | slash-to-dash cwd (dots stripped)    | basename + suffix (via map)        | none (cwd in session_meta only)   | SHA1 hex of cwd                    |
 | Key → cwd decode    | ✅ string replace                    | 🔧 `projects.json` lookup           | 🔧 read first line of each file    | 🔧 read `project/<hash>.json`      |
-| Central index       | ❌ none needed (filesystem IS index) | ✅ `projects.json`                  | ❌ none                            | ✅ SQLite + `project/*.json`        |
+| Central index       | ❌ none needed (filesystem IS index) | ✅ `projects.json`                  | ≈ `session_index.jsonl` (no cwd)  | ✅ SQLite + `project/*.json`        |
 | Session ID          | UUIDv4                                | user-chosen tag (+ implicit "last")| UUIDv7                             | ULID-ish `ses_<26ch>`              |
-| Transcript format   | JSONL append-only                    | per-chat JSON snapshot             | JSONL append-only                 | SQLite + JSON mirror (5-way split) |
+| Transcript format   | JSONL append-only                    | per-chat JSON snapshot             | JSONL append-only                 | SQLite + JSON mirror (12-table)    |
 | Append model        | ✅ append stream                      | ❌ snapshot per save                | ✅ append stream                   | ✅ append via SQLite                |
 | First-line header   | event in stream                      | n/a (full JSON)                    | ✅ `session_meta`                  | session.json sidecar               |
 | Resume by ID        | ✅ `--resume <uuid>`                  | ✅ `chat resume <tag>`              | ✅ `resume <id>` / `--last`        | ✅ `--session <id>` / TUI           |
@@ -65,12 +66,18 @@ Source: <https://code.claude.com/docs/en/session-management>
 
 ## Coverage summary
 
-| CLI         | Native ✅ | Workaround 🔧 | Missing ❌ | Fitness for USP adapter |
-|-------------|----------|---------------|------------|-------------------------|
-| Claude Code | 14       | 2             | 4          | **Reference** (~250 LOC)|
-| OpenCode    | 12       | 4             | 4          | Mid (~500 LOC)          |
-| Gemini CLI  | 9        | 4             | 7          | Easy-mid (~300 LOC)     |
-| Codex CLI   | 5        | 5             | 10         | Hard (~400 LOC)         |
+19 dimensions mapped (see table above). Every cell classified.
+Counts updated 2026-04-11 after dossier cross-check.
+
+| CLI         | ✅ | 🔧 | ≈ | ❌ | Adapter estimate  |
+|-------------|---|---|---|---|-------------------|
+| Claude Code | 14 | 1  | — | 4  | **Ref** (~300 LOC)|
+| OpenCode    | 16 | 2  | — | 1  | Mid (~600 LOC)    |
+| Gemini CLI  | 10 | 2  | — | 7  | Easy-mid (~300)   |
+| Codex CLI   | 10 | 1  | 1 | 7  | Hard (~400 LOC)   |
+
+Adapter LOC updated per dossier findings (OpenCode 12-table
+schema raised estimate from ~500 to ~600).
 
 ## Workaround patterns (cross-CLI)
 
@@ -79,7 +86,8 @@ Source: <https://code.claude.com/docs/en/session-management>
 Compute the CLI's native project key from an absolute cwd and look
 up sessions by that key.
 
-- Claude: `cwd.replace('/', '-')` → direct dir lookup
+- Claude: `cwd.replace('/', '-').replace('.', '')` → dir lookup
+  (dot-stripping is lossy; read `cwd` from first JSONL event)
 - Gemini: read `projects.json` → alias → `history/<alias>/`
 - OpenCode: `sha1(cwd)` → `storage/session/<hash>/`
 - Codex: ❌ no key; must walk + read first-line cwd
@@ -89,8 +97,9 @@ up sessions by that key.
 Walk the native store, extract (cwd, session-id) pairs, build a
 USP-managed reverse index so subsequent queries are O(1).
 
-Required for Codex. Useful as cache for Gemini (if `projects.json`
-is large) and OpenCode (if SQLite is slow).
+Required for Codex project grouping (native `session_index.jsonl`
+has thread names but no cwd). Useful as cache for Gemini (if
+`projects.json` is large) and OpenCode (if SQLite is slow).
 
 ### Pattern C — filesystem watcher
 
@@ -107,11 +116,20 @@ when USP is running as a daemon.
 
 Rehydrate a full session by joining multiple stores.
 
-- OpenCode: session + message + part + todo by session_id
+- OpenCode: 12-table Drizzle schema; core join path is
+  session → message → part (part keyed by msg_id, not ses_id);
+  also todo, permission, workspace, event tables
 - Claude: JSONL + `~/.claude/todos/<uuid>.json`
 - Gemini/Codex: single-stream (no join needed)
 
-### Pattern E — header extraction
+### Pattern E — subagent / child artifact walk
+
+Claude stores subagent transcripts in separate files under
+`<session>/subagents/agent-<hash>.jsonl` — not inline in the main
+JSONL. Adapter must discover + walk this dir per session. Other
+CLIs embed tool/agent output inline.
+
+### Pattern F — header extraction
 
 Extract metadata by reading only the first line / first bytes of
 a transcript file to avoid parsing the whole history.
@@ -154,15 +172,38 @@ provides:
 - Cross-CLI session join: `usp session show <session-id>` walks
   all adapters
 
+## Verified findings (2026-04-11)
+
+Key corrections after cross-checking dossiers:
+
+- **Claude:** project key strips dots (lossy); subagent transcripts
+  live in `<session>/subagents/agent-<hash>.jsonl` (separate files,
+  not inline); adapter must walk subagent dir for full picture
+- **Gemini:** no chat transcript files observed on disk — only
+  `.project_root` markers; suggests `/chat save` never used or
+  transcripts ephemeral until explicit save
+- **Codex:** `session_index.jsonl` exists as native index (maps
+  session ID → thread name + timestamp) but lacks cwd; schema
+  drifts across CLI versions (field renames, additions) without
+  a schema version field; `response_item` is the line type (not
+  `user_message`/`tool_call`)
+- **OpenCode:** 12-table Drizzle schema (not 5); part table keyed
+  by message ID not session ID; `snapshot/` at root level (not
+  under `storage/`); `migration` marker under `storage/`
+
 ## Open questions
 
 1. Should USP normalize session IDs across CLIs (prefix with
    `cli:` e.g. `claude:uuid`, `codex:uuid7`) or keep native IDs
    with CLI-scoped namespaces?
-2. How should USP handle Codex's cross-cwd resume drift when
-   attributing turns to a project?
-3. Should USP mirror OpenCode's 5-way split (session/message/part/
-   todo/diff) or flatten to a single event stream?
+2. ~~How should USP handle Codex's cross-cwd resume drift?~~
+   **Resolved:** Codex resume is unscoped — no cwd rewrite on
+   resume. USP must attribute by original `session_meta.cwd` and
+   flag any resumed-from-different-cwd sessions.
+3. ~~Should USP mirror OpenCode's 5-way split?~~ **Updated:**
+   OpenCode has 12 tables. Core join path: session → message →
+   part. USP should flatten to event stream but preserve join
+   keys as metadata for lossless round-trip.
 4. Is there a portable format USP should export sessions to for
    cross-tool archival (e.g., one canonical JSONL schema)?
 
@@ -173,5 +214,5 @@ See separate files in this directory:
 - [claude-code.md](claude-code.md) — reference layout + memory subsystem
 - [gemini-cli.md](gemini-cli.md) — basename+suffix alias via projects.json
 - [codex-cli.md](codex-cli.md) — date-partitioned rollouts, cwd in header
-- [opencode.md](opencode.md) — SHA1 hash + SQLite + 5-way split
+- [opencode.md](opencode.md) — SHA1 hash + SQLite + 12-table schema
 - [kit-integration.md](kit-integration.md) — hop-top/kit delegation map

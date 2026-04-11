@@ -1,0 +1,27 @@
+graph TD
+    User["User runs usp CLI"] --> Router["Cobra Router"]
+
+    Router --> List["session list"]
+    Router --> Show["session show &lt;id&gt;"]
+    Router --> Doctor["doctor"]
+
+    List --> FanOut["Adapter Fan-Out"]
+    Show --> Priority["ID-Format Priority Resolver"]
+    Priority --> FanOut
+
+    FanOut --> Claude["claude adapter<br/>~/.claude/projects/<br/>JSONL files"]
+    FanOut --> Codex["codex adapter<br/>~/.codex/sessions/<br/>date-partitioned JSONL"]
+    FanOut --> Gemini["gemini adapter<br/>~/.gemini/history/<br/>JSON + projects.json"]
+    FanOut --> OpenCode["opencode adapter<br/>~/.local/share/opencode/<br/>SQLite DB"]
+
+    Claude --> Envelope["Session Envelope<br/>(normalized)"]
+    Codex --> Envelope
+    Gemini --> Envelope
+    OpenCode --> Envelope
+
+    Envelope --> Merge["Sort + Limit + Render"]
+    Merge --> Output["table / json / yaml"]
+
+    Doctor --> Registry["kit/uxp CLIRegistry"]
+    Registry --> Checks["Check: installed?<br/>Check: store exists?<br/>Check: store readable?<br/>Check: index DB?"]
+    Checks --> Report["Doctor Report"]

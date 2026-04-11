@@ -5,6 +5,7 @@ go 1.26.2
 require (
 	github.com/spf13/cobra v1.10.2
 	hop.top/kit v0.2.0-alpha.1
+	hop.top/xrr v0.1.0-alpha.3
 	modernc.org/sqlite v1.48.0
 )
 

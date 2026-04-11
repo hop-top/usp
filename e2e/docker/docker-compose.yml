@@ -1,0 +1,11 @@
+services:
+  e2e:
+    build:
+      context: ../..
+      dockerfile: e2e/docker/Dockerfile
+    volumes:
+      - ./cassettes:/cassettes
+    environment:
+      - XRR_MODE=record
+      - XRR_CASSETTE_DIR=/cassettes
+    working_dir: /workspace

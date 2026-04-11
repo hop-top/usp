@@ -1,0 +1,8 @@
+.git
+bin/
+vendor/
+*.db
+*.db-wal
+*.db-shm
+.xray_*
+e2e/cassettes/

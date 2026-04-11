@@ -31,7 +31,7 @@ while IFS= read -r line; do
     done
     OLDEST[$cli]="${cleaned[0]}"
     MID[$cli]="${cleaned[$(( ${#cleaned[@]} / 2 ))]}"
-    NEWEST[$cli]="${cleaned[-1]}"
+    NEWEST[$cli]="${cleaned[${#cleaned[@]}-1]}"
   fi
 done < "$MATRIX"
 

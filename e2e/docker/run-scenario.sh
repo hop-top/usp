@@ -20,5 +20,6 @@ docker run --rm \
   -v "${cassette_dir}:/cassettes" \
   -e XRR_MODE=record \
   -e XRR_CASSETTE_DIR=/cassettes \
+  -w /src/usp \
   "$image" \
-  bash "e2e/scenarios/${scenario}.sh"
+  bash "/src/usp/e2e/scenarios/${scenario}.sh"

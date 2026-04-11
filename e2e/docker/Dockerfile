@@ -47,28 +47,25 @@ ARG OPENCODE_VERSION=latest
 # ── Claude Code (Anthropic) ─────────────────────────────────────
 RUN npm install -g \
       "@anthropic-ai/claude-code@${CLAUDE_VERSION}"
-RUN claude --version || true
+RUN claude --version
 
 # ── Codex (OpenAI) ──────────────────────────────────────────────
 RUN npm install -g \
       "@openai/codex@${CODEX_VERSION}"
-RUN codex --version || true
+RUN codex --version
 
 # ── Gemini CLI (Google) ─────────────────────────────────────────
 RUN npm install -g \
       "@google/gemini-cli@${GEMINI_VERSION}"
-RUN gemini --version || true
+RUN gemini --version
 
 # ── OpenCode (sst) ──────────────────────────────────────────────
 # Primary: official installer. Fallback: npm package.
 RUN curl -fsSL https://opencode.ai/install | bash \
  && ln -sf /root/.opencode/bin/opencode /usr/local/bin/opencode \
       2>/dev/null \
- || true
-RUN if ! command -v opencode >/dev/null 2>&1; then \
-      npm install -g "opencode-ai@${OPENCODE_VERSION}"; \
-    fi
-RUN opencode --version || true
+ || npm install -g "opencode-ai@${OPENCODE_VERSION}"
+RUN opencode --version
 
 # ── Build usp from source ──────────────────────────────────────
 WORKDIR /src/usp
@@ -76,22 +73,14 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN go build -o /usr/local/bin/usp ./cmd/usp
+RUN usp --version
 
 # ── Install xrr ────────────────────────────────────────────────
-RUN go install hop.top/xrr/go/cmd/xrr@latest \
- || true
-RUN xrr --version || true
+RUN go install hop.top/xrr/go/cmd/xrr@latest
+RUN xrr --version
 
 # ── Runtime env ─────────────────────────────────────────────────
 ENV XRR_MODE="record"
 ENV XRR_CASSETTE_DIR="/cassettes"
 
-WORKDIR /workspace
-
-# Healthcheck: confirm all binaries exist.
-RUN usp --version || true \
- && claude --version || true \
- && codex --version || true \
- && gemini --version || true \
- && opencode --version || true \
- && go version
+WORKDIR /src/usp

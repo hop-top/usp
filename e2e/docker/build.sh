@@ -10,7 +10,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 RESOLVE="${REPO_ROOT}/e2e/scripts/resolve-matrix.sh"
 DOCKERFILE="${REPO_ROOT}/e2e/docker/Dockerfile"
-ALL_COMBOS=("latest" "minimum" "mixed")
+ALL_COMBOS=("latest" "oldest" "mixed")
 
 combos=("${@:-}")
 if [[ ${#combos[@]} -eq 0 || -z "${combos[0]}" ]]; then

@@ -1,0 +1,27 @@
+name: E2E Record (Weekly)
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  record:
+    name: Record E2E Baselines
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Record all cassettes
+        run: |
+          XRR_MODE=record docker compose \
+            -f e2e/docker/docker-compose.yml \
+            up --build --exit-code-from usp-e2e
+
+      - name: Commit updated cassettes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "test(e2e): update cassette baselines"
+          file_pattern: e2e/cassettes/**

@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"hop.top/usp/internal/sessionutil"
 	"hop.top/usp/lineage"
 	"hop.top/usp/session"
 )
@@ -56,8 +57,8 @@ func resumeCmd() *cobra.Command {
 				}
 			} else {
 				// Find most recent session for cwd.
-				all := collectSessions(adapters, cwd)
-				all = sortAndLimit(all, 1)
+				all := sessionutil.CollectSessions(adapters, cwd)
+				all = sessionutil.SortAndLimit(all, 1)
 				if len(all) == 0 {
 					return fmt.Errorf("no sessions found for %s", cwd)
 				}

@@ -7,7 +7,8 @@ Find any coding session across any AI assistant. One command.
 **"Which tool did I use for that auth fix last Tuesday?"**
 You switch between Claude, Gemini, Codex, OpenCode. Each
 buries sessions in different formats, different paths. USP
-reads all of them and gives you one sorted list.
+reads all of them, gives you one sorted list — and can
+resume where you left off in any other tool.
 
 **"I need to replay what happened in that failed refactor."**
 `usp session show <id>` — metadata, turns, tool calls.
@@ -21,6 +22,42 @@ Implement one interface, get detection + diagnostics free.
 `usp session list --project .` — every assistant's sessions
 for this directory, newest first.
 
+## The killer feature: cross-CLI resume
+
+Start in one assistant, continue in another. Full context
+carries over — no copy-paste, no re-explaining.
+
+```sh
+# Start a session in Claude
+claude
+# ... work on auth feature, exit
+
+# Resume the same conversation in Codex
+usp resume --tool codex
+# Codex picks up with full conversation context
+
+# Resume again in Gemini
+usp resume --tool gemini
+# Gemini continues where Codex left off
+
+# See the full lineage
+usp session lineage <id>
+```
+
+Sample lineage output:
+
+```
+Session: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+Project: ~/projects/myapp
+
+  #  CLI       Native ID     Started              Turns
+  1  claude    fe2eb947-ec…  2026-04-10 04:40:25  142
+  2  codex     019d70b5-83…  2026-04-10 05:10:00   38
+  3  gemini    usp-resume-…  2026-04-10 05:30:00   12
+
+Total: 192 turns across 3 CLIs
+```
+
 ## Quickstart
 
 ```sh
@@ -31,6 +68,9 @@ usp install              # index detected CLIs
 usp session list         # all sessions, all CLIs, sorted
 usp session show <id>    # full session detail
 usp session search auth  # find sessions mentioning "auth"
+
+usp resume --tool codex        # resume last session in Codex
+usp session lineage <id>      # cross-CLI conversation history
 ```
 
 ### Flags

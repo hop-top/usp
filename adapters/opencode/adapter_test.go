@@ -3,7 +3,9 @@ package opencode
 import (
 	"database/sql"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"hop.top/kit/uxp"
 	"hop.top/usp/session"
@@ -11,8 +13,9 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Compile-time interface satisfaction check.
+// Compile-time interface satisfaction checks.
 var _ session.SessionAdapter = (*Adapter)(nil)
+var _ session.ResumeAdapter = (*Adapter)(nil)
 
 // setupFixtureDB creates a temp SQLite database with session/message/part
 // tables and inserts test data.
@@ -376,5 +379,124 @@ func TestStreamTurnsOrdering(t *testing.T) {
 			t.Errorf("turn[%d].Content = %q, want %q",
 				i, contents[i], want)
 		}
+	}
+}
+
+func TestResumeCmd(t *testing.T) {
+	a := New()
+	cmd := a.ResumeCmd("ses_abc123")
+	want := []string{"opencode", "--session", "ses_abc123"}
+	if len(cmd) != len(want) {
+		t.Fatalf("ResumeCmd len = %d, want %d", len(cmd), len(want))
+	}
+	for i := range want {
+		if cmd[i] != want[i] {
+			t.Errorf("ResumeCmd[%d] = %q, want %q", i, cmd[i], want[i])
+		}
+	}
+}
+
+func TestResumeAdapterInterface(t *testing.T) {
+	// Compile-time check is via var _ above; this confirms at runtime.
+	var ra session.ResumeAdapter = New()
+	if ra.CLI() != uxp.CLIOpenCode {
+		t.Errorf("CLI() = %q, want %q", ra.CLI(), uxp.CLIOpenCode)
+	}
+}
+
+func TestInjectSession(t *testing.T) {
+	_, a := setupFixtureDB(t)
+
+	ts := time.Date(2024, 4, 10, 12, 0, 0, 0, time.UTC)
+	turns := []session.Turn{
+		{
+			Role:      session.RoleUser,
+			Content:   "Implement the feature",
+			Timestamp: ts,
+		},
+		{
+			Role:      session.RoleAssistant,
+			Content:   "Sure, working on it.",
+			Timestamp: ts.Add(10 * time.Second),
+			ToolCalls: []session.ToolCall{
+				{
+					Name:   "Edit",
+					Input:  `{"file":"main.go"}`,
+					Output: "done",
+				},
+			},
+		},
+	}
+
+	sesID, err := a.InjectSession("/foo/bar", turns)
+	if err != nil {
+		t.Fatalf("InjectSession: %v", err)
+	}
+
+	// Verify ID format.
+	if !strings.HasPrefix(sesID, "ses_") {
+		t.Errorf("session ID %q missing ses_ prefix", sesID)
+	}
+	if len(sesID) != 30 { // "ses_" (4) + 26 chars
+		t.Errorf("session ID len = %d, want 30", len(sesID))
+	}
+
+	// Read back via GetSession.
+	s, err := a.GetSession(sesID)
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if s.TurnCount != 2 {
+		t.Errorf("TurnCount = %d, want 2", s.TurnCount)
+	}
+	if s.Metadata["title"] != "USP resumed session" {
+		t.Errorf("title = %v, want %q", s.Metadata["title"],
+			"USP resumed session")
+	}
+	if s.ProjectCwd != "/foo/bar" {
+		t.Errorf("ProjectCwd = %q, want /foo/bar", s.ProjectCwd)
+	}
+
+	// Read back via StreamTurns.
+	ch, err := a.StreamTurns(sesID)
+	if err != nil {
+		t.Fatalf("StreamTurns: %v", err)
+	}
+
+	var got []session.Turn
+	for turn := range ch {
+		got = append(got, turn)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d turns, want 2", len(got))
+	}
+
+	if got[0].Role != session.RoleUser {
+		t.Errorf("turn[0].Role = %q, want user", got[0].Role)
+	}
+	if got[0].Content != "Implement the feature" {
+		t.Errorf("turn[0].Content = %q", got[0].Content)
+	}
+
+	if got[1].Role != session.RoleAssistant {
+		t.Errorf("turn[1].Role = %q, want assistant", got[1].Role)
+	}
+	// Content comes from message data + text part.
+	if !strings.Contains(got[1].Content, "Sure, working on it.") {
+		t.Errorf("turn[1].Content missing assistant text: %q",
+			got[1].Content)
+	}
+
+	if len(got[1].ToolCalls) != 1 {
+		t.Fatalf("turn[1].ToolCalls len = %d, want 1",
+			len(got[1].ToolCalls))
+	}
+	if got[1].ToolCalls[0].Name != "Edit" {
+		t.Errorf("tool call name = %q, want Edit",
+			got[1].ToolCalls[0].Name)
+	}
+	if got[1].ToolCalls[0].Output != "done" {
+		t.Errorf("tool call output = %q, want done",
+			got[1].ToolCalls[0].Output)
 	}
 }

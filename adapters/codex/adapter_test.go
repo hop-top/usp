@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -332,6 +333,85 @@ func TestCapabilities(t *testing.T) {
 	coverage := caps.Coverage()
 	if len(coverage) != 20 {
 		t.Errorf("coverage has %d dims, want 20", len(coverage))
+	}
+}
+
+func TestResumeAdapterInterface(t *testing.T) {
+	var _ session.ResumeAdapter = (*Adapter)(nil)
+}
+
+func TestInjectSession(t *testing.T) {
+	tmp := t.TempDir()
+	root := filepath.Join(tmp, ".codex", "sessions")
+	restore := SetSessionsRoot(root)
+	defer restore()
+
+	cwd := "/Users/test/injected"
+	turns := []session.Turn{
+		{Role: session.RoleUser, Content: "hello from claude", Timestamp: time.Now()},
+		{Role: session.RoleAssistant, Content: "hi back", Timestamp: time.Now(),
+			ToolCalls: []session.ToolCall{{Name: "Bash", Output: "ok"}}},
+	}
+
+	a := &Adapter{}
+	id, err := a.InjectSession(cwd, turns)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id == "" {
+		t.Fatal("expected non-empty session ID")
+	}
+	// UUID format check
+	if len(id) != 36 || id[8] != '-' || id[13] != '-' {
+		t.Errorf("id %q not UUID-shaped", id)
+	}
+
+	// Read back via GetSession
+	s, err := a.GetSession(id)
+	if err != nil {
+		t.Fatalf("GetSession(%s): %v", id, err)
+	}
+	if s.ProjectCwd != cwd {
+		t.Errorf("cwd = %q, want %q", s.ProjectCwd, cwd)
+	}
+	if s.TurnCount != 2 {
+		t.Errorf("turn_count = %d, want 2", s.TurnCount)
+	}
+	if s.Metadata["originator"] != "usp" {
+		t.Errorf("originator = %v, want usp", s.Metadata["originator"])
+	}
+
+	// Verify turns via StreamTurns
+	ch, err := a.StreamTurns(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []session.Turn
+	for turn := range ch {
+		got = append(got, turn)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 turns, got %d", len(got))
+	}
+	if got[0].Role != session.RoleUser || got[0].Content != "hello from claude" {
+		t.Errorf("turn[0] = %+v", got[0])
+	}
+	if !strings.Contains(got[1].Content, "[Tool: Bash") {
+		t.Errorf("turn[1].content = %q, want tool summary", got[1].Content)
+	}
+}
+
+func TestResumeCmd(t *testing.T) {
+	a := &Adapter{}
+	cmd := a.ResumeCmd("abc-123")
+	want := []string{"codex", "resume", "abc-123"}
+	if len(cmd) != len(want) {
+		t.Fatalf("cmd = %v, want %v", cmd, want)
+	}
+	for i := range want {
+		if cmd[i] != want[i] {
+			t.Errorf("cmd[%d] = %q, want %q", i, cmd[i], want[i])
+		}
 	}
 }
 

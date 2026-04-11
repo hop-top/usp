@@ -12,6 +12,8 @@
 package gemini
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -40,8 +42,9 @@ type Adapter struct {
 	HomeDir string
 }
 
-// Ensure Adapter satisfies the interface at compile time.
+// Ensure Adapter satisfies both interfaces at compile time.
 var _ session.SessionAdapter = (*Adapter)(nil)
+var _ session.ResumeAdapter = (*Adapter)(nil)
 
 // CLI returns the canonical CLI name.
 func (a *Adapter) CLI() uxp.CLIName { return uxp.CLIGemini }
@@ -200,6 +203,9 @@ func (a *Adapter) StreamTurns(id string) (<-chan session.Turn, error) {
 		History []struct {
 			Role    string `json:"role"`
 			Content string `json:"content"`
+			Parts   []struct {
+				Text string `json:"text"`
+			} `json:"parts"`
 		} `json:"history"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -208,14 +214,100 @@ func (a *Adapter) StreamTurns(id string) (<-chan session.Turn, error) {
 
 	ch := make(chan session.Turn, len(raw.History))
 	for _, msg := range raw.History {
+		content := msg.Content
+		if content == "" && len(msg.Parts) > 0 {
+			var texts []string
+			for _, p := range msg.Parts {
+				texts = append(texts, p.Text)
+			}
+			content = strings.Join(texts, "\n")
+		}
 		ch <- session.Turn{
 			Role:      mapRole(msg.Role),
-			Content:   msg.Content,
+			Content:   content,
 			Timestamp: time.Time{}, // Gemini transcripts lack per-message timestamps.
 		}
 	}
 	close(ch)
 	return ch, nil
+}
+
+// geminiPart mirrors the Gemini chat JSON part structure.
+type geminiPart struct {
+	Text string `json:"text"`
+}
+
+// geminiMsg mirrors a single Gemini chat history message.
+type geminiMsg struct {
+	Role  string       `json:"role"`
+	Parts []geminiPart `json:"parts"`
+}
+
+// geminiChat is the top-level Gemini chat JSON structure.
+type geminiChat struct {
+	History []geminiMsg `json:"history"`
+}
+
+// InjectSession writes turns into Gemini's native history dir as a
+// new chat JSON file, enabling cross-CLI resume via `gemini chat
+// resume <tag>`.
+//
+// CAVEAT (2026-04-11): Gemini CLI has no observed chat files on disk.
+// Whether it actually reads injected files on resume is unverified.
+func (a *Adapter) InjectSession(cwd string, turns []session.Turn) (string, error) {
+	alias := a.ProjectKey(cwd)
+	histDir := filepath.Join(a.geminiRoot(), "history", alias)
+	if err := os.MkdirAll(histDir, 0o755); err != nil {
+		return "", fmt.Errorf("gemini: create history dir: %w", err)
+	}
+
+	var msgs []geminiMsg
+	for _, t := range turns {
+		role, text := "user", t.Content
+		switch t.Role {
+		case session.RoleAssistant:
+			role = "model"
+		case session.RoleSystem:
+			text = "[System] " + text
+		}
+		// Append tool call summaries.
+		for _, tc := range t.ToolCalls {
+			text += fmt.Sprintf("\n[Tool: %s → %s]", tc.Name, tc.Output)
+		}
+		msgs = append(msgs, geminiMsg{
+			Role:  role,
+			Parts: []geminiPart{{Text: text}},
+		})
+	}
+
+	tag, err := generateTag()
+	if err != nil {
+		return "", err
+	}
+
+	data, err := json.MarshalIndent(geminiChat{History: msgs}, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("gemini: marshal chat: %w", err)
+	}
+	p := filepath.Join(histDir, tag+".json")
+	if err := os.WriteFile(p, data, 0o644); err != nil {
+		return "", fmt.Errorf("gemini: write chat file: %w", err)
+	}
+	return tag, nil
+}
+
+// ResumeCmd returns the CLI command to resume an injected session.
+func (a *Adapter) ResumeCmd(nativeID string) []string {
+	return []string{"gemini", "chat", "resume", nativeID}
+}
+
+// generateTag returns a "usp-resume-<8hex>" tag.
+func generateTag() (string, error) {
+	b := make([]byte, 4)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("gemini: generate tag: %w", err)
+	}
+	return "usp-resume-" + hex.EncodeToString(b), nil
 }
 
 // geminiRoot returns the resolved ~/.gemini path.

@@ -19,6 +19,7 @@ func main() {
 
 	root.Cmd.AddCommand(
 		sessionCmd(root),
+		resumeCmd(),
 		doctorCmd(),
 		installCmd(),
 	)

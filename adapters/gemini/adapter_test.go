@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"hop.top/kit/uxp"
 	"hop.top/usp/session"
@@ -299,5 +301,123 @@ func TestCapabilities(t *testing.T) {
 	}
 	if missing != 7 {
 		t.Errorf("missing count = %d, want 7", missing)
+	}
+}
+
+func TestResumeAdapterInterface(t *testing.T) {
+	var _ session.ResumeAdapter = (*Adapter)(nil)
+}
+
+func TestResumeCmd(t *testing.T) {
+	a := &Adapter{}
+	got := a.ResumeCmd("my-tag")
+	want := []string{"gemini", "chat", "resume", "my-tag"}
+	if len(got) != len(want) {
+		t.Fatalf("ResumeCmd() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("ResumeCmd()[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestInjectSession(t *testing.T) {
+	tmp := t.TempDir()
+	cwd := "/Users/me/projects/myapp"
+	writeProjectsJSON(t, tmp, map[string]string{cwd: "myapp"})
+
+	a := &Adapter{HomeDir: tmp}
+	turns := []session.Turn{
+		{Role: session.RoleUser, Content: "hello", Timestamp: time.Now()},
+		{Role: session.RoleAssistant, Content: "hi there", Timestamp: time.Now(),
+			ToolCalls: []session.ToolCall{
+				{Name: "Read", Output: "file contents"},
+			}},
+		{Role: session.RoleSystem, Content: "context info", Timestamp: time.Now()},
+	}
+
+	tag, err := a.InjectSession(cwd, turns)
+	if err != nil {
+		t.Fatalf("InjectSession() error: %v", err)
+	}
+	if !strings.HasPrefix(tag, "usp-resume-") {
+		t.Fatalf("tag %q missing usp-resume- prefix", tag)
+	}
+	if len(tag) != len("usp-resume-")+8 {
+		t.Fatalf("tag %q unexpected length", tag)
+	}
+
+	// Verify file was created in the right place.
+	p := filepath.Join(tmp, ".gemini", "history", "myapp", tag+".json")
+	data, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("read injected file: %v", err)
+	}
+
+	var chat geminiChat
+	if err := json.Unmarshal(data, &chat); err != nil {
+		t.Fatalf("parse injected file: %v", err)
+	}
+	if len(chat.History) != 3 {
+		t.Fatalf("history len = %d, want 3", len(chat.History))
+	}
+	if chat.History[0].Role != "user" || chat.History[0].Parts[0].Text != "hello" {
+		t.Errorf("msg[0] = %+v", chat.History[0])
+	}
+	if chat.History[1].Role != "model" {
+		t.Errorf("msg[1].role = %q, want model", chat.History[1].Role)
+	}
+	if !strings.Contains(chat.History[1].Parts[0].Text, "[Tool: Read") {
+		t.Errorf("msg[1] missing tool summary: %s", chat.History[1].Parts[0].Text)
+	}
+	if chat.History[2].Role != "user" {
+		t.Errorf("msg[2].role = %q, want user (system mapped)", chat.History[2].Role)
+	}
+	if !strings.HasPrefix(chat.History[2].Parts[0].Text, "[System] ") {
+		t.Errorf("msg[2] missing [System] prefix: %s", chat.History[2].Parts[0].Text)
+	}
+
+	// Verify ListSessions finds the injected session.
+	sessions, err := a.ListSessions(cwd)
+	if err != nil {
+		t.Fatalf("ListSessions() error: %v", err)
+	}
+	found := false
+	for _, s := range sessions {
+		if s.ID == tag {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("ListSessions() did not return injected session %q", tag)
+	}
+
+	// Verify GetSession finds it.
+	s, err := a.GetSession(tag)
+	if err != nil {
+		t.Fatalf("GetSession(%q) error: %v", tag, err)
+	}
+	if s.ID != tag || s.CLI != uxp.CLIGemini {
+		t.Errorf("GetSession() = %+v", s)
+	}
+
+	// Verify StreamTurns reads back the parts-based format.
+	ch, err := a.StreamTurns(tag)
+	if err != nil {
+		t.Fatalf("StreamTurns(%q) error: %v", tag, err)
+	}
+	var readBack []session.Turn
+	for turn := range ch {
+		readBack = append(readBack, turn)
+	}
+	if len(readBack) != 3 {
+		t.Fatalf("StreamTurns() returned %d turns, want 3", len(readBack))
+	}
+	if readBack[0].Role != session.RoleUser || readBack[0].Content != "hello" {
+		t.Errorf("turn[0] = %+v", readBack[0])
+	}
+	if readBack[1].Role != session.RoleAssistant {
+		t.Errorf("turn[1].Role = %q, want assistant", readBack[1].Role)
 	}
 }

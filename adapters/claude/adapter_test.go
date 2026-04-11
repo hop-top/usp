@@ -5,13 +5,15 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"hop.top/kit/uxp"
 	"hop.top/usp/session"
 )
 
-// Compile-time interface satisfaction check.
+// Compile-time interface satisfaction checks.
 var _ session.SessionAdapter = (*Adapter)(nil)
+var _ session.ResumeAdapter = (*Adapter)(nil)
 
 func TestProjectKey(t *testing.T) {
 	a := New()
@@ -289,5 +291,83 @@ func TestProjectKeyDotReplacement(t *testing.T) {
 	want = "-Users-jadb--agents"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestInjectSession(t *testing.T) {
+	home := t.TempDir()
+	a := New(WithHomeDir(home))
+
+	now := time.Date(2026, 4, 11, 12, 0, 0, 0, time.UTC)
+	turns := []session.Turn{
+		{Role: session.RoleUser, Content: "Hello", Timestamp: now},
+		{
+			Role: session.RoleAssistant, Content: "Hi!",
+			Timestamp: now.Add(time.Second),
+			ToolCalls: []session.ToolCall{
+				{Name: "Read", Input: "/tmp/f.txt", Output: "contents"},
+			},
+		},
+		{Role: session.RoleUser, Content: "Thanks", Timestamp: now.Add(2 * time.Second)},
+	}
+
+	uuid, err := a.InjectSession("/foo/bar", turns)
+	if err != nil {
+		t.Fatalf("InjectSession: %v", err)
+	}
+	if uuid == "" {
+		t.Fatal("expected non-empty UUID")
+	}
+
+	// Verify file exists.
+	path := filepath.Join(home, ".claude", "projects", "-foo-bar", uuid+".jsonl")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("JSONL file missing: %v", err)
+	}
+
+	// Round-trip: read back via GetSession.
+	s, err := a.GetSession(uuid)
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if s.TurnCount != 3 {
+		t.Errorf("TurnCount = %d, want 3", s.TurnCount)
+	}
+
+	// Round-trip: stream turns back.
+	ch, err := a.StreamTurns(uuid)
+	if err != nil {
+		t.Fatalf("StreamTurns: %v", err)
+	}
+	var got []session.Turn
+	for turn := range ch {
+		got = append(got, turn)
+	}
+	if len(got) != 3 {
+		t.Fatalf("got %d turns, want 3", len(got))
+	}
+	if got[0].Content != "Hello" {
+		t.Errorf("turn[0].Content = %q, want %q", got[0].Content, "Hello")
+	}
+	if got[2].Content != "Thanks" {
+		t.Errorf("turn[2].Content = %q, want %q", got[2].Content, "Thanks")
+	}
+	// Assistant turn includes tool call summary.
+	if got[1].Role != session.RoleAssistant {
+		t.Errorf("turn[1].Role = %q, want assistant", got[1].Role)
+	}
+}
+
+func TestResumeCmd(t *testing.T) {
+	a := New()
+	got := a.ResumeCmd("abc-123")
+	want := []string{"claude", "--resume", "abc-123"}
+	if len(got) != len(want) {
+		t.Fatalf("len = %d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("ResumeCmd()[%d] = %q, want %q", i, got[i], want[i])
+		}
 	}
 }

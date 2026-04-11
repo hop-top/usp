@@ -3,7 +3,9 @@ package claude
 
 import (
 	"bufio"
+	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -160,6 +162,80 @@ func (a *Adapter) StreamTurns(id string) (<-chan session.Turn, error) {
 		}
 	}()
 	return ch, nil
+}
+
+// InjectSession writes turns into Claude Code's native JSONL format,
+// creating a new session that can be resumed with --resume.
+func (a *Adapter) InjectSession(cwd string, turns []session.Turn) (string, error) {
+	root, err := a.storeRoot()
+	if err != nil {
+		return "", err
+	}
+
+	key := a.ProjectKey(cwd)
+	projDir := filepath.Join(root, key)
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		return "", err
+	}
+
+	uuid, err := newUUID()
+	if err != nil {
+		return "", err
+	}
+
+	f, err := os.Create(filepath.Join(projDir, uuid+".jsonl"))
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	enc := json.NewEncoder(f)
+
+	// Summary line.
+	if err := enc.Encode(map[string]any{
+		"type": "summary", "version": "1",
+		"uuid": uuid, "parentUuid": "", "cwd": cwd,
+	}); err != nil {
+		return "", err
+	}
+
+	for _, t := range turns {
+		content := t.Content
+		if t.Role == session.RoleAssistant && len(t.ToolCalls) > 0 {
+			for _, tc := range t.ToolCalls {
+				content += fmt.Sprintf("\n[Tool: %s %s → %s]", tc.Name, tc.Input, tc.Output)
+			}
+		}
+		ev := map[string]any{
+			"type":      string(t.Role),
+			"timestamp": t.Timestamp.Format(time.RFC3339),
+			"message": map[string]any{
+				"role":    string(t.Role),
+				"content": content,
+			},
+		}
+		if err := enc.Encode(ev); err != nil {
+			return "", err
+		}
+	}
+	return uuid, nil
+}
+
+// ResumeCmd returns the CLI command to resume an injected session.
+func (a *Adapter) ResumeCmd(nativeID string) []string {
+	return []string{"claude", "--resume", nativeID}
+}
+
+// newUUID generates a v4 UUID using crypto/rand.
+func newUUID() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	b[6] = (b[6] & 0x0f) | 0x40 // version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // variant 10
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
 }
 
 // findSessionFile walks all project dirs looking for <id>.jsonl.

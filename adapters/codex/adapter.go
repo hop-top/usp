@@ -7,6 +7,9 @@ package codex
 
 import (
 	"bufio"
+	"crypto/rand"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -18,10 +21,12 @@ import (
 	"hop.top/usp/session"
 )
 
-// Adapter implements session.SessionAdapter for the Codex CLI.
+// Adapter implements session.SessionAdapter and session.ResumeAdapter
+// for the Codex CLI.
 type Adapter struct{}
 
 var _ session.SessionAdapter = (*Adapter)(nil)
+var _ session.ResumeAdapter = (*Adapter)(nil)
 
 func (a *Adapter) CLI() uxp.CLIName { return uxp.CLICodex }
 
@@ -79,6 +84,97 @@ func (a *Adapter) StreamTurns(id string) (<-chan session.Turn, error) {
 		streamFile(path, ch)
 	}()
 	return ch, nil
+}
+
+// InjectSession writes turns into the Codex native JSONL session
+// store, creating a synthetic session that can be resumed.
+func (a *Adapter) InjectSession(cwd string, turns []session.Turn) (string, error) {
+	root, err := sessionsRootFn()
+	if err != nil {
+		return "", err
+	}
+	now := time.Now().UTC()
+	id := generateUUIDv7(now)
+	dayDir := filepath.Join(root, now.Format("2006"), now.Format("01"), now.Format("02"))
+	if err := os.MkdirAll(dayDir, 0o755); err != nil {
+		return "", fmt.Errorf("codex: mkdir: %w", err)
+	}
+	ts := now.Format("2006-01-02T15-04-05")
+	fname := fmt.Sprintf("rollout-%s-%s.jsonl", ts, id)
+	f, err := os.Create(filepath.Join(dayDir, fname))
+	if err != nil {
+		return "", fmt.Errorf("codex: create: %w", err)
+	}
+	defer f.Close()
+	enc := json.NewEncoder(f)
+	iso := now.Format(time.RFC3339Nano)
+	meta := map[string]any{
+		"timestamp": iso, "type": "session_meta",
+		"payload": map[string]any{
+			"id": id, "timestamp": iso, "cwd": cwd,
+			"originator": "usp", "cli_version": "0.0.0", "source": "usp",
+		},
+	}
+	if err := enc.Encode(meta); err != nil {
+		return "", fmt.Errorf("codex: write meta: %w", err)
+	}
+	for _, t := range turns {
+		content := t.Content
+		if len(t.ToolCalls) > 0 {
+			var b strings.Builder
+			if content != "" {
+				b.WriteString(content)
+				b.WriteByte('\n')
+			}
+			for _, tc := range t.ToolCalls {
+				fmt.Fprintf(&b, "[Tool: %s", tc.Name)
+				if tc.Output != "" {
+					fmt.Fprintf(&b, " → %s", tc.Output)
+				}
+				b.WriteByte(']')
+			}
+			content = b.String()
+		}
+		item := map[string]any{
+			"timestamp": iso, "type": "response_item",
+			"payload": map[string]any{
+				"id": "msg_" + randHex(12), "type": "message",
+				"role": string(t.Role),
+				"content": []map[string]any{
+					{"type": "output_text", "text": content},
+				},
+			},
+		}
+		if err := enc.Encode(item); err != nil {
+			return "", fmt.Errorf("codex: write turn: %w", err)
+		}
+	}
+	return id, nil
+}
+
+// ResumeCmd returns the CLI command to resume the given session.
+func (a *Adapter) ResumeCmd(nativeID string) []string {
+	return []string{"codex", "resume", nativeID}
+}
+
+// generateUUIDv7 produces a UUIDv7-style string from the given time
+// plus crypto/rand entropy.
+func generateUUIDv7(t time.Time) string {
+	var b [16]byte
+	ms := uint64(t.UnixMilli())
+	binary.BigEndian.PutUint32(b[0:4], uint32(ms>>16))
+	binary.BigEndian.PutUint16(b[4:6], uint16(ms&0xFFFF))
+	rand.Read(b[6:])
+	b[6] = (b[6] & 0x0F) | 0x70 // version 7
+	b[8] = (b[8] & 0x3F) | 0x80 // variant 10
+	h := hex.EncodeToString(b[:])
+	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:32]
+}
+
+func randHex(n int) string {
+	b := make([]byte, n)
+	rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 // --- types ---

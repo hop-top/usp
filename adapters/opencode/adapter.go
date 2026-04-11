@@ -2,8 +2,10 @@
 package opencode
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -87,6 +89,15 @@ func (a *Adapter) openDB() (*sql.DB, error) {
 		return nil, err
 	}
 	return sql.Open("sqlite", path+"?mode=ro")
+}
+
+// openDBRW opens the SQLite database in read-write mode.
+func (a *Adapter) openDBRW() (*sql.DB, error) {
+	path, err := a.dbFilePath()
+	if err != nil {
+		return nil, err
+	}
+	return sql.Open("sqlite", path+"?mode=rwc")
 }
 
 // ListSessions returns all sessions for the given project cwd.
@@ -346,6 +357,102 @@ func msToTime(ms int64) time.Time {
 		return time.Time{}
 	}
 	return time.UnixMilli(ms)
+}
+
+// genID generates an OpenCode-style ID with the given prefix.
+// Format: prefix + 26 mixed-case alphanumeric chars.
+func genID(prefix string) string {
+	const alpha = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	buf := make([]byte, 26)
+	b := make([]byte, 26)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	for i := range buf {
+		buf[i] = alpha[int(b[i])%len(alpha)]
+	}
+	return prefix + string(buf)
+}
+
+// InjectSession writes turns into OpenCode's native session store,
+// creating a new session that can be resumed via --session flag.
+func (a *Adapter) InjectSession(cwd string, turns []session.Turn) (string, error) {
+	db, err := a.openDBRW()
+	if err != nil {
+		return "", fmt.Errorf("opencode: open db rw: %w", err)
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return "", fmt.Errorf("opencode: begin tx: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	sesID := genID("ses_")
+	projectID := a.ProjectKey(cwd)
+	now := time.Now().UnixMilli()
+
+	_, err = tx.Exec(`
+		INSERT INTO session (id, project_id, title, directory,
+			created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		sesID, projectID, "USP resumed session", cwd, now, now,
+	)
+	if err != nil {
+		return "", fmt.Errorf("opencode: insert session: %w", err)
+	}
+
+	for _, turn := range turns {
+		msgID := genID("msg_")
+		ts := turn.Timestamp.UnixMilli()
+		if ts <= 0 {
+			ts = now
+		}
+
+		md := messageData{Role: string(turn.Role), Content: turn.Content}
+		data, _ := json.Marshal(md)
+
+		_, err = tx.Exec(`
+			INSERT INTO message (id, session_id, data, created_at)
+			VALUES (?, ?, ?, ?)`,
+			msgID, sesID, string(data), ts,
+		)
+		if err != nil {
+			return "", fmt.Errorf("opencode: insert message: %w", err)
+		}
+
+		// Tool call parts.
+		for _, tc := range turn.ToolCalls {
+			pd := partDataJSON{
+				Type:     "tool-invocation",
+				ToolName: tc.Name,
+				Output:   tc.Output,
+			}
+			if tc.Input != "" {
+				pd.Input = json.RawMessage(tc.Input)
+			}
+			raw, _ := json.Marshal(pd)
+			_, err = tx.Exec(`
+				INSERT INTO part (id, message_id, session_id, data, created_at)
+				VALUES (?, ?, ?, ?, ?)`,
+				genID("prt_"), msgID, sesID, string(raw), ts,
+			)
+			if err != nil {
+				return "", fmt.Errorf("opencode: insert tool part: %w", err)
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return "", fmt.Errorf("opencode: commit: %w", err)
+	}
+	return sesID, nil
+}
+
+// ResumeCmd returns the CLI command to resume an injected session.
+func (a *Adapter) ResumeCmd(nativeID string) []string {
+	return []string{"opencode", "--session", nativeID}
 }
 
 // capMap implements uxp.CapabilityMap for OpenCode.

@@ -68,9 +68,10 @@ fi
 echo "=== Step 5: Verify lineage ==="
 usp session list --project "$PROJECT" 2>/dev/null || true
 
-# If we have a USP-level session with lineage, verify the chain.
+# Lineage is tracked in the lineage store, not in session list output.
+# Use the most recent session's full ID (now available in JSON via .id).
 USP_ID=$(usp session list --project "$PROJECT" --format json 2>/dev/null \
-  | jq -r '[.[] | select(.segments | length > 1)][0].usp_id // empty') || true
+  | jq -r '.[0].id // empty') || true
 
 if [ -n "${USP_ID:-}" ]; then
   echo "  Lineage for $USP_ID:"

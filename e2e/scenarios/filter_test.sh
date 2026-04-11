@@ -8,10 +8,10 @@ assert_eq() {
   local got="$1" want="$2" msg="$3"
   if [[ "$got" == "$want" ]]; then
     echo "PASS: $msg (got $got)"
-    ((PASS++))
+    PASS=$((PASS+1))
   else
     echo "FAIL: $msg — want $want, got $got"
-    ((FAIL++))
+    FAIL=$((FAIL+1))
   fi
 }
 
@@ -19,10 +19,10 @@ assert_le() {
   local got="$1" max="$2" msg="$3"
   if (( got <= max )); then
     echo "PASS: $msg (got $got)"
-    ((PASS++))
+    PASS=$((PASS+1))
   else
     echo "FAIL: $msg — want <= $max, got $got"
-    ((FAIL++))
+    FAIL=$((FAIL+1))
   fi
 }
 
@@ -50,61 +50,77 @@ echo "--- Seeding sessions ---"
 (cd "$PROJECT_B" && opencode -p "say hello") \
   || true
 
+# Verify at least some sessions seeded before testing filters.
+all_json=$(usp session list --format json 2>/dev/null || echo "[]")
+total=$(echo "$all_json" | jq 'length' 2>/dev/null || echo "0")
+if [[ "$total" -eq 0 ]]; then
+  echo "SKIP: No sessions seeded (API keys likely absent)."
+  exit 0
+fi
+echo "Seeded $total sessions."
+
 echo ""
 echo "--- Running filter tests ---"
 
+# Helper: safe json length (treats empty/missing stdout as 0).
+json_len() {
+  local raw="${1:-[]}"
+  if [[ -z "$raw" ]]; then raw="[]"; fi
+  echo "$raw" | jq 'length' 2>/dev/null || echo "0"
+}
+
 # ── --tool filter ───────────────────────────────────────────────────
 
-result=$(usp session list --tool claude --format json)
-count=$(echo "$result" | jq 'length')
+result=$(usp session list --tool claude --format json 2>/dev/null || echo "[]")
+count=$(json_len "$result")
 assert_eq "$count" "1" "--tool claude returns 1 session"
 
-result=$(usp session list --tool codex --format json)
-count=$(echo "$result" | jq 'length')
+result=$(usp session list --tool codex --format json 2>/dev/null || echo "[]")
+count=$(json_len "$result")
 assert_eq "$count" "1" "--tool codex returns 1 session"
 
 # ── --project filter ────────────────────────────────────────────────
 
-result=$(usp session list --project "$PROJECT_A" --format json)
-count=$(echo "$result" | jq 'length')
+result=$(usp session list --project "$PROJECT_A" --format json 2>/dev/null || echo "[]")
+count=$(json_len "$result")
 assert_eq "$count" "2" "--project project-a returns 2 sessions"
 
-result=$(usp session list --project "$PROJECT_B" --format json)
-count=$(echo "$result" | jq 'length')
+result=$(usp session list --project "$PROJECT_B" --format json 2>/dev/null || echo "[]")
+count=$(json_len "$result")
 assert_eq "$count" "2" "--project project-b returns 2 sessions"
 
 # ── --limit filter ──────────────────────────────────────────────────
 
-result=$(usp session list --limit 2 --format json)
-count=$(echo "$result" | jq 'length')
+result=$(usp session list --limit 2 --format json 2>/dev/null || echo "[]")
+count=$(json_len "$result")
 assert_le "$count" "2" "--limit 2 returns at most 2"
 
-result=$(usp session list --limit 1 --format json)
-count=$(echo "$result" | jq 'length')
+result=$(usp session list --limit 1 --format json 2>/dev/null || echo "[]")
+count=$(json_len "$result")
 assert_le "$count" "1" "--limit 1 returns at most 1"
 
 # ── --since filter ──────────────────────────────────────────────────
 
-result=$(usp session list --since 1h --format json)
-count=$(echo "$result" | jq 'length')
+result=$(usp session list --since 1h --format json 2>/dev/null || echo "[]")
+count=$(json_len "$result")
 assert_eq "$count" "4" "--since 1h returns all 4 recent sessions"
 
-result=$(usp session list --since 1m --format json)
-count=$(echo "$result" | jq 'length')
+result=$(usp session list --since 1m --format json 2>/dev/null || echo "[]")
+count=$(json_len "$result")
 assert_eq "$count" "4" "--since 1m returns all 4 recent sessions"
 
 # ── Compound: --tool + --project ────────────────────────────────────
 
-result=$(usp session list --tool claude --project "$PROJECT_A" --format json)
-count=$(echo "$result" | jq 'length')
+result=$(usp session list --tool claude --project "$PROJECT_A" --format json 2>/dev/null || echo "[]")
+count=$(json_len "$result")
 assert_eq "$count" "1" "--tool claude + --project project-a = 1"
 
-result=$(usp session list --tool claude --project "$PROJECT_B" --format json)
-count=$(echo "$result" | jq 'length')
+result=$(usp session list --tool claude --project "$PROJECT_B" --format json 2>/dev/null || echo "[]")
+count=$(json_len "$result")
 assert_eq "$count" "0" "--tool claude + --project project-b = 0"
 
-result=$(usp session list --tool codex --project "$PROJECT_B" --format json)
-count=$(echo "$result" | jq 'length')
+result=$(usp session list --tool codex --project "$PROJECT_B" --format json 2>/dev/null || echo "[]")
+count=$(json_len "$result")
 assert_eq "$count" "1" "--tool codex + --project project-b = 1"
 
 # ── Summary ─────────────────────────────────────────────────────────

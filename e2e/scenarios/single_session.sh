@@ -11,7 +11,7 @@ status() {
   local level="$1" cli="$2" msg="$3"
   echo "${level}: [${cli}] ${msg}"
   case "$level" in
-    PASS) ((PASS++)) ;; WARN) ((WARN++)) ;; FAIL) ((FAIL++)) ;;
+    PASS) PASS=$((PASS+1)) ;; WARN) WARN=$((WARN+1)) ;; FAIL) FAIL=$((FAIL+1)) ;;
   esac
 }
 

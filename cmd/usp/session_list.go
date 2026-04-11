@@ -14,7 +14,8 @@ import (
 
 // sessionRow is the table-renderable projection of a session.
 type sessionRow struct {
-	ID      string `table:"ID"      json:"id"`
+	ID      string `table:"ID"      json:"-"`
+	FullID  string `table:"-"       json:"id"`
 	CLI     string `table:"CLI"     json:"cli"`
 	Project string `table:"PROJECT" json:"project"`
 	Started string `table:"STARTED" json:"started"`
@@ -208,6 +209,7 @@ func toRows(ss []session.Session) []sessionRow {
 	for i, s := range ss {
 		rows[i] = sessionRow{
 			ID:      truncateID(s.ID, 12),
+			FullID:  s.ID,
 			CLI:     string(s.CLI),
 			Project: s.ProjectCwd,
 			Started: relativeTime(s.StartedAt),

@@ -5,6 +5,7 @@ package sessionutil
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"hop.top/usp/session"
@@ -65,6 +66,80 @@ func CollectSessions(
 		all = append(all, sessions...)
 	}
 	return all
+}
+
+// ResolveOpts narrows prefix matching by project and/or time range.
+type ResolveOpts struct {
+	Project string
+	Since   time.Time
+}
+
+// ResolveSessionID resolves a full or partial session ID to an exact
+// match. Returns the matched session, adapter name, and adapter.
+// If the prefix is ambiguous, returns an error listing matches.
+func ResolveSessionID(
+	id string,
+	adapters map[string]session.SessionAdapter,
+	order []string,
+	opts ...ResolveOpts,
+) (*session.Session, string, session.SessionAdapter, error) {
+	var opt ResolveOpts
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+	// Try exact match first (fast path).
+	for _, name := range order {
+		a, ok := adapters[name]
+		if !ok {
+			continue
+		}
+		s, err := a.GetSession(id)
+		if err == nil && s != nil && s.ID == id {
+			return s, name, a, nil
+		}
+	}
+
+	// Prefix match across all adapters.
+	type match struct {
+		sess *session.Session
+		cli  string
+		a    session.SessionAdapter
+	}
+	var matches []match
+	for _, name := range order {
+		a, ok := adapters[name]
+		if !ok {
+			continue
+		}
+		sessions, err := a.ListSessions(opt.Project)
+		if err != nil {
+			continue
+		}
+		for i := range sessions {
+			if !strings.HasPrefix(sessions[i].ID, id) {
+				continue
+			}
+			if !opt.Since.IsZero() && sessions[i].StartedAt.Before(opt.Since) {
+				continue
+			}
+			matches = append(matches, match{&sessions[i], name, a})
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		return nil, "", nil, fmt.Errorf("session %q not found", id)
+	case 1:
+		return matches[0].sess, matches[0].cli, matches[0].a, nil
+	default:
+		var ids []string
+		for _, m := range matches {
+			ids = append(ids, fmt.Sprintf("  %s (%s)", m.sess.ID, m.cli))
+		}
+		return nil, "", nil, fmt.Errorf(
+			"prefix %q is ambiguous (%d matches):\n%s",
+			id, len(matches), strings.Join(ids, "\n"))
+	}
 }
 
 // ParseSince parses duration shorthand (7d, 24h, 30m) or date

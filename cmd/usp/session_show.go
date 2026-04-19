@@ -12,6 +12,7 @@ import (
 	"hop.top/usp/adapters/codex"
 	"hop.top/usp/adapters/gemini"
 	"hop.top/usp/adapters/opencode"
+	"hop.top/usp/internal/sessionutil"
 	"hop.top/usp/session"
 )
 
@@ -68,6 +69,8 @@ func sessionShowCmd() *cobra.Command {
 	var (
 		cliFlag string
 		format  string
+		project string
+		since   string
 	)
 
 	cmd := &cobra.Command{
@@ -77,41 +80,27 @@ func sessionShowCmd() *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			id := args[0]
 			adapters := allAdapters()
-
-			var names []string
-			if cliFlag != "" {
-				a, ok := adapters[cliFlag]
-				if !ok {
-					return fmt.Errorf("unknown CLI %q", cliFlag)
-				}
-				adapters = map[string]session.SessionAdapter{cliFlag: a}
-				names = []string{cliFlag}
-			} else {
-				names = adapterOrder(id)
+			adapters = sessionutil.FilterAdapters(adapters, cliFlag)
+			if adapters == nil {
+				return fmt.Errorf("unknown CLI %q", cliFlag)
 			}
 
-			var sess *session.Session
-			var matchedCLI string
-			for _, name := range names {
-				a, ok := adapters[name]
-				if !ok {
-					continue
+			var opts sessionutil.ResolveOpts
+			opts.Project = project
+			if since != "" {
+				t, err := sessionutil.ParseSince(since)
+				if err != nil {
+					return fmt.Errorf("invalid --since: %w", err)
 				}
-				s, err := a.GetSession(id)
-				if err != nil || s == nil {
-					continue
-				}
-				sess = s
-				matchedCLI = name
-				break
-			}
-			if sess == nil {
-				return fmt.Errorf("session %q not found", id)
+				opts.Since = t
 			}
 
-			// Collect turns.
-			a := adapters[matchedCLI]
-			ch, err := a.StreamTurns(id)
+			sess, matchedCLI, a, err := sessionutil.ResolveSessionID(
+				id, adapters, adapterOrder(id), opts)
+			if err != nil {
+				return err
+			}
+			ch, err := a.StreamTurns(sess.ID)
 			var turns []showTurn
 			if err == nil {
 				for turn := range ch {
@@ -143,5 +132,9 @@ func sessionShowCmd() *cobra.Command {
 	cmd.Flags().StringVar(&cliFlag, "tool", "", "Restrict search to a specific CLI")
 	cmd.Flags().StringVar(&format, "format", "table",
 		"Output format (table, json, yaml)")
+	cmd.Flags().StringVar(&project, "project", "",
+		"Narrow prefix match to project dir")
+	cmd.Flags().StringVar(&since, "since", "",
+		"Narrow prefix match to sessions since (e.g. 7d, 2026-04-01)")
 	return cmd
 }

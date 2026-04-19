@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"hop.top/usp/internal/sessionutil"
 	"hop.top/usp/lineage"
 	"hop.top/usp/session"
 )
@@ -44,25 +45,19 @@ func sessionLineageCmd() *cobra.Command {
 // tryNativeLineage falls back to native adapters for a single-segment display.
 func tryNativeLineage(id string) error {
 	adapters := allAdapters()
-	for _, name := range adapterOrder(id) {
-		a, ok := adapters[name]
-		if !ok {
-			continue
-		}
-		s, err := a.GetSession(id)
-		if err != nil || s == nil {
-			continue
-		}
-		s.Segments = []session.Segment{{
-			CLI:       s.CLI,
-			NativeID:  s.ID,
-			StartedAt: s.StartedAt,
-			TurnCount: s.TurnCount,
-		}}
-		printLineage(s)
-		return nil
+	s, _, _, err := sessionutil.ResolveSessionID(
+		id, adapters, adapterOrder(id))
+	if err != nil {
+		return err
 	}
-	return fmt.Errorf("session %q not found", id)
+	s.Segments = []session.Segment{{
+		CLI:       s.CLI,
+		NativeID:  s.ID,
+		StartedAt: s.StartedAt,
+		TurnCount: s.TurnCount,
+	}}
+	printLineage(s)
+	return nil
 }
 
 func printLineage(sess *session.Session) {

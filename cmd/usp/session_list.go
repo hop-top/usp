@@ -50,6 +50,9 @@ func sessionListCmd() *cobra.Command {
 			all = sessionutil.SortAndLimit(all, limit)
 
 			if len(all) == 0 {
+				if format != output.Table {
+					return output.Render(os.Stdout, output.Format(format), []sessionRow{})
+				}
 				fmt.Fprintln(os.Stderr, "No sessions found.")
 				return nil
 			}
@@ -126,6 +129,9 @@ func sessionSearchCmd() *cobra.Command {
 			matched = sessionutil.SortAndLimit(matched, limit)
 
 			if len(matched) == 0 {
+				if format != output.Table {
+					return output.Render(os.Stdout, output.Format(format), []sessionRow{})
+				}
 				fmt.Fprintln(os.Stderr, "No matching sessions.")
 				return nil
 			}

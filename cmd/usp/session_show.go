@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"strings"
 
 	"github.com/spf13/cobra"
+	"hop.top/kit/output"
 	"hop.top/kit/uxp"
 	"hop.top/usp/adapters/claude"
 	"hop.top/usp/adapters/codex"
@@ -45,8 +45,30 @@ func adapterOrder(id string) []string {
 	}
 }
 
+// showResult is the unified payload for session show across all formats.
+// Table format renders the top-level metadata; JSON/YAML includes turns.
+type showResult struct {
+	ID        string     `table:"ID"      json:"id"`
+	CLI       string     `table:"CLI"     json:"cli"`
+	Project   string     `table:"PROJECT" json:"project"`
+	StartedAt string     `table:"STARTED" json:"started_at"`
+	EndedAt   string     `table:"ENDED"   json:"ended_at"`
+	TurnCount int        `table:"TURNS"   json:"turn_count"`
+	Turns     []showTurn `table:"-"       json:"turns"`
+}
+
+type showTurn struct {
+	Role      string             `json:"role"`
+	Content   string             `json:"content"`
+	Timestamp string             `json:"timestamp"`
+	ToolCalls []session.ToolCall `json:"tool_calls,omitempty"`
+}
+
 func sessionShowCmd() *cobra.Command {
-	var cliFlag string
+	var (
+		cliFlag string
+		format  string
+	)
 
 	cmd := &cobra.Command{
 		Use:   "show <id>",
@@ -87,57 +109,39 @@ func sessionShowCmd() *cobra.Command {
 				return fmt.Errorf("session %q not found", id)
 			}
 
-			// Print metadata.
+			// Collect turns.
+			a := adapters[matchedCLI]
+			ch, err := a.StreamTurns(id)
+			var turns []showTurn
+			if err == nil {
+				for turn := range ch {
+					turns = append(turns, showTurn{
+						Role:      string(turn.Role),
+						Content:   turn.Content,
+						Timestamp: turn.Timestamp.Format("2006-01-02 15:04:05"),
+						ToolCalls: turn.ToolCalls,
+					})
+				}
+			}
+
 			ended := "active"
 			if sess.EndedAt != nil {
 				ended = sess.EndedAt.Format("2006-01-02 15:04:05")
 			}
-			fmt.Fprintf(os.Stdout,
-				"Session: %s\nCLI:     %s\nProject: %s\nStarted: %s\nEnded:   %s\nTurns:   %d\n",
-				sess.ID, matchedCLI, sess.ProjectCwd,
-				sess.StartedAt.Format("2006-01-02 15:04:05"),
-				ended, sess.TurnCount,
-			)
 
-			// Stream turns.
-			a := adapters[matchedCLI]
-			ch, err := a.StreamTurns(id)
-			if err != nil {
-				return nil // metadata printed; turns unavailable
-			}
-
-			idx := 0
-			for turn := range ch {
-				idx++
-				ts := turn.Timestamp.Format("2006-01-02 15:04:05")
-				fmt.Fprintf(os.Stdout, "\nTurn %d [%s] %s\n", idx, turn.Role, ts)
-
-				content := truncate(turn.Content, 100)
-				if content != "" {
-					fmt.Fprintf(os.Stdout, "  %s\n", content)
-				}
-
-				if len(turn.ToolCalls) > 0 {
-					names := make([]string, len(turn.ToolCalls))
-					for i, tc := range turn.ToolCalls {
-						names[i] = tc.Name
-					}
-					fmt.Fprintf(os.Stdout, "  Tool calls: %s\n", strings.Join(names, ", "))
-				}
-			}
-			return nil
+			return output.Render(os.Stdout, output.Format(format), showResult{
+				ID:        sess.ID,
+				CLI:       matchedCLI,
+				Project:   sess.ProjectCwd,
+				StartedAt: sess.StartedAt.Format("2006-01-02 15:04:05"),
+				EndedAt:   ended,
+				TurnCount: sess.TurnCount,
+				Turns:     turns,
+			})
 		},
 	}
 	cmd.Flags().StringVar(&cliFlag, "tool", "", "Restrict search to a specific CLI")
+	cmd.Flags().StringVar(&format, "format", "table",
+		"Output format (table, json, yaml)")
 	return cmd
-}
-
-func truncate(s string, max int) string {
-	// Collapse newlines for display.
-	s = strings.ReplaceAll(s, "\n", " ")
-	s = strings.TrimSpace(s)
-	if len(s) <= max {
-		return s
-	}
-	return s[:max] + "..."
 }

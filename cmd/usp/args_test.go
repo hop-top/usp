@@ -50,6 +50,9 @@ func TestArgsSessionShowRequiresOneArg(t *testing.T) {
 	if cmd.Flags().Lookup("tool") == nil {
 		t.Error("missing --tool flag")
 	}
+	if cmd.Flags().Lookup("format") == nil {
+		t.Error("missing --format flag")
+	}
 
 	// 0 args.
 	cmd.SetArgs([]string{})

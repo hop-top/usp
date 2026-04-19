@@ -386,6 +386,41 @@ func extractContent(raw json.RawMessage) string {
 
 	// Try content blocks array.
 	var blocks []struct {
+		Type    string          `json:"type"`
+		Text    string          `json:"text"`
+		Content json.RawMessage `json:"content"`
+	}
+	if err := json.Unmarshal(raw, &blocks); err == nil {
+		var parts []string
+		for _, b := range blocks {
+			switch b.Type {
+			case "text":
+				if b.Text != "" {
+					parts = append(parts, b.Text)
+				}
+			case "tool_result":
+				if s := extractToolResultContent(b.Content); s != "" {
+					parts = append(parts, s)
+				}
+			}
+		}
+		return strings.Join(parts, "\n")
+	}
+
+	return ""
+}
+
+// extractToolResultContent extracts text from a tool_result's content
+// field, which can be a plain string or an array of content blocks.
+func extractToolResultContent(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s
+	}
+	var blocks []struct {
 		Type string `json:"type"`
 		Text string `json:"text"`
 	}
@@ -398,7 +433,6 @@ func extractContent(raw json.RawMessage) string {
 		}
 		return strings.Join(parts, "\n")
 	}
-
 	return ""
 }
 

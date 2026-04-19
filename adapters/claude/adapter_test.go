@@ -358,6 +358,95 @@ func TestInjectSession(t *testing.T) {
 	}
 }
 
+func TestExtractContent_ToolResultString(t *testing.T) {
+	raw := json.RawMessage(`[{"type":"tool_result","tool_use_id":"t1","content":"file contents here"}]`)
+	got := extractContent(raw)
+	if got != "file contents here" {
+		t.Errorf("extractContent tool_result string = %q, want %q", got, "file contents here")
+	}
+}
+
+func TestExtractContent_ToolResultArray(t *testing.T) {
+	raw := json.RawMessage(`[{"type":"tool_result","tool_use_id":"t1","content":[{"type":"text","text":"line one"},{"type":"text","text":"line two"}]}]`)
+	got := extractContent(raw)
+	if got != "line one\nline two" {
+		t.Errorf("extractContent tool_result array = %q, want %q", got, "line one\nline two")
+	}
+}
+
+func TestExtractContent_MixedTextAndToolResult(t *testing.T) {
+	raw := json.RawMessage(`[{"type":"text","text":"preamble"},{"type":"tool_result","tool_use_id":"t1","content":"result data"}]`)
+	got := extractContent(raw)
+	if got != "preamble\nresult data" {
+		t.Errorf("extractContent mixed = %q, want %q", got, "preamble\nresult data")
+	}
+}
+
+func TestStreamTurns_ToolResultUserTurn(t *testing.T) {
+	home := t.TempDir()
+	projDir := filepath.Join(home, ".claude", "projects", "-foo-bar")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	events := []map[string]any{
+		{
+			"uuid": "e1", "type": "user",
+			"timestamp": "2026-04-10T10:00:00.000Z",
+			"cwd": "/foo/bar", "sessionId": "sess-tr",
+			"message": map[string]any{
+				"role":    "user",
+				"content": "read main.go",
+			},
+		},
+		{
+			"uuid": "e2", "type": "assistant",
+			"timestamp": "2026-04-10T10:00:05.000Z",
+			"sessionId": "sess-tr",
+			"message": map[string]any{
+				"role": "assistant",
+				"content": []map[string]any{
+					{"type": "text", "text": "Reading file..."},
+					{"type": "tool_use", "name": "Read", "input": map[string]any{"path": "/foo/bar/main.go"}},
+				},
+			},
+		},
+		{
+			"uuid": "e3", "type": "user",
+			"timestamp": "2026-04-10T10:00:06.000Z",
+			"sessionId": "sess-tr",
+			"message": map[string]any{
+				"role": "user",
+				"content": []map[string]any{
+					{"type": "tool_result", "tool_use_id": "tu1", "content": "package main\nfunc main() {}"},
+				},
+			},
+		},
+	}
+
+	writeFixtureJSONL(t, projDir, "sess-tr.jsonl", events)
+	a := New(WithHomeDir(home))
+
+	ch, err := a.StreamTurns("sess-tr")
+	if err != nil {
+		t.Fatalf("StreamTurns: %v", err)
+	}
+	var turns []session.Turn
+	for turn := range ch {
+		turns = append(turns, turn)
+	}
+	if len(turns) != 3 {
+		t.Fatalf("got %d turns, want 3", len(turns))
+	}
+	// tool_result user turn must preserve content
+	if turns[2].Content == "" {
+		t.Error("tool_result user turn has empty content")
+	}
+	if turns[2].Content != "package main\nfunc main() {}" {
+		t.Errorf("turn[2].Content = %q, want tool result content", turns[2].Content)
+	}
+}
+
 func TestResumeCmd(t *testing.T) {
 	a := New()
 	got := a.ResumeCmd("abc-123")

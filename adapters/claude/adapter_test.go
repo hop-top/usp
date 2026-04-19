@@ -447,6 +447,265 @@ func TestStreamTurns_ToolResultUserTurn(t *testing.T) {
 	}
 }
 
+func TestStreamTurns_ToolResultInlined(t *testing.T) {
+	home := t.TempDir()
+	projDir := filepath.Join(home, ".claude", "projects", "-foo-bar")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	events := []map[string]any{
+		{
+			"uuid": "e1", "type": "user",
+			"timestamp": "2026-04-10T10:00:00.000Z",
+			"cwd": "/foo/bar", "sessionId": "sess-inline",
+			"message": map[string]any{
+				"role":    "user",
+				"content": "read main.go",
+			},
+		},
+		{
+			"uuid": "e2", "type": "assistant",
+			"timestamp": "2026-04-10T10:00:05.000Z",
+			"sessionId": "sess-inline",
+			"message": map[string]any{
+				"role": "assistant",
+				"content": []map[string]any{
+					{"type": "text", "text": "Reading file..."},
+					{"type": "tool_use", "id": "toolu_abc123", "name": "Read",
+						"input": map[string]any{"path": "/foo/bar/main.go"}},
+				},
+			},
+		},
+		{
+			"uuid": "e3", "type": "user",
+			"timestamp": "2026-04-10T10:00:06.000Z",
+			"sessionId": "sess-inline",
+			"message": map[string]any{
+				"role": "user",
+				"content": []map[string]any{
+					{"type": "tool_result", "tool_use_id": "toolu_abc123",
+						"content": "package main\nfunc main() {}"},
+				},
+			},
+		},
+		{
+			"uuid": "e4", "type": "user",
+			"timestamp": "2026-04-10T10:00:10.000Z",
+			"sessionId": "sess-inline",
+			"message": map[string]any{
+				"role":    "user",
+				"content": "looks good",
+			},
+		},
+	}
+
+	writeFixtureJSONL(t, projDir, "sess-inline.jsonl", events)
+	a := New(WithHomeDir(home))
+
+	ch, err := a.StreamTurns("sess-inline")
+	if err != nil {
+		t.Fatalf("StreamTurns: %v", err)
+	}
+	var turns []session.Turn
+	for turn := range ch {
+		turns = append(turns, turn)
+	}
+
+	// user + assistant + tool_result user + plain user = 4
+	if len(turns) != 4 {
+		t.Fatalf("got %d turns, want 4", len(turns))
+	}
+
+	// assistant turn must have tool call with Output resolved
+	if len(turns[1].ToolCalls) != 1 {
+		t.Fatalf("turn[1].ToolCalls len = %d, want 1", len(turns[1].ToolCalls))
+	}
+	tc := turns[1].ToolCalls[0]
+	if tc.Name != "Read" {
+		t.Errorf("tool call name = %q, want Read", tc.Name)
+	}
+	const wantOutput = "package main\nfunc main() {}"
+	if tc.Output != wantOutput {
+		t.Errorf("tool call Output = %q, want %q", tc.Output, wantOutput)
+	}
+
+	// tool_result user turn still emitted with its content
+	if turns[2].Role != session.RoleUser {
+		t.Errorf("turn[2].Role = %q, want user", turns[2].Role)
+	}
+	if turns[2].Content != wantOutput {
+		t.Errorf("turn[2].Content = %q, want %q", turns[2].Content, wantOutput)
+	}
+}
+
+func TestStreamTurns_MultipleToolCallsInlined(t *testing.T) {
+	home := t.TempDir()
+	projDir := filepath.Join(home, ".claude", "projects", "-foo-bar")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	events := []map[string]any{
+		{
+			"uuid": "e1", "type": "assistant",
+			"timestamp": "2026-04-10T10:00:00.000Z",
+			"cwd": "/foo/bar", "sessionId": "sess-multi",
+			"message": map[string]any{
+				"role": "assistant",
+				"content": []map[string]any{
+					{"type": "tool_use", "id": "id-1", "name": "Read",
+						"input": map[string]any{"path": "/a"}},
+					{"type": "tool_use", "id": "id-2", "name": "Bash",
+						"input": map[string]any{"command": "ls"}},
+				},
+			},
+		},
+		{
+			"uuid": "e2", "type": "user",
+			"timestamp": "2026-04-10T10:00:05.000Z",
+			"sessionId": "sess-multi",
+			"message": map[string]any{
+				"role": "user",
+				"content": []map[string]any{
+					{"type": "tool_result", "tool_use_id": "id-1", "content": "content of a"},
+					{"type": "tool_result", "tool_use_id": "id-2", "content": "file.go"},
+				},
+			},
+		},
+	}
+
+	writeFixtureJSONL(t, projDir, "sess-multi.jsonl", events)
+	a := New(WithHomeDir(home))
+
+	ch, err := a.StreamTurns("sess-multi")
+	if err != nil {
+		t.Fatalf("StreamTurns: %v", err)
+	}
+	var turns []session.Turn
+	for turn := range ch {
+		turns = append(turns, turn)
+	}
+
+	if len(turns) != 2 {
+		t.Fatalf("got %d turns, want 2", len(turns))
+	}
+
+	calls := turns[0].ToolCalls
+	if len(calls) != 2 {
+		t.Fatalf("ToolCalls len = %d, want 2", len(calls))
+	}
+	if calls[0].Output != "content of a" {
+		t.Errorf("calls[0].Output = %q, want %q", calls[0].Output, "content of a")
+	}
+	if calls[1].Output != "file.go" {
+		t.Errorf("calls[1].Output = %q, want %q", calls[1].Output, "file.go")
+	}
+}
+
+func TestStreamTurns_ConsecutiveAssistantToolUse(t *testing.T) {
+	home := t.TempDir()
+	projDir := filepath.Join(home, ".claude", "projects", "-foo-bar")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Real pattern: two separate assistant turns each with one tool_use,
+	// followed by two user turns each with the matching tool_result.
+	events := []map[string]any{
+		{
+			"uuid": "e1", "type": "assistant",
+			"timestamp": "2026-04-10T10:00:00.000Z",
+			"cwd": "/foo/bar", "sessionId": "sess-consec",
+			"message": map[string]any{
+				"role": "assistant",
+				"content": []map[string]any{
+					{"type": "tool_use", "id": "id-a", "name": "Bash",
+						"input": map[string]any{"command": "tlc task show 62"}},
+				},
+			},
+		},
+		{
+			"uuid": "e2", "type": "assistant",
+			"timestamp": "2026-04-10T10:00:01.000Z",
+			"sessionId": "sess-consec",
+			"message": map[string]any{
+				"role": "assistant",
+				"content": []map[string]any{
+					{"type": "tool_use", "id": "id-b", "name": "Bash",
+						"input": map[string]any{"command": "xray map"}},
+				},
+			},
+		},
+		{
+			"uuid": "e3", "type": "user",
+			"timestamp": "2026-04-10T10:00:05.000Z",
+			"sessionId": "sess-consec",
+			"message": map[string]any{
+				"role": "user",
+				"content": []map[string]any{
+					{"type": "tool_result", "tool_use_id": "id-a",
+						"content": "task output"},
+				},
+			},
+		},
+		{
+			"uuid": "e4", "type": "user",
+			"timestamp": "2026-04-10T10:00:06.000Z",
+			"sessionId": "sess-consec",
+			"message": map[string]any{
+				"role": "user",
+				"content": []map[string]any{
+					{"type": "tool_result", "tool_use_id": "id-b",
+						"content": "xray output"},
+				},
+			},
+		},
+		{
+			"uuid": "e5", "type": "user",
+			"timestamp": "2026-04-10T10:01:00.000Z",
+			"sessionId": "sess-consec",
+			"message": map[string]any{
+				"role":    "user",
+				"content": "looks good",
+			},
+		},
+	}
+
+	writeFixtureJSONL(t, projDir, "sess-consec.jsonl", events)
+	a := New(WithHomeDir(home))
+
+	ch, err := a.StreamTurns("sess-consec")
+	if err != nil {
+		t.Fatalf("StreamTurns: %v", err)
+	}
+	var turns []session.Turn
+	for turn := range ch {
+		turns = append(turns, turn)
+	}
+
+	// 2 assistant + 2 tool_result user + 1 plain user = 5
+	if len(turns) != 5 {
+		t.Fatalf("got %d turns, want 5", len(turns))
+	}
+
+	// Order: assistant(resolved) → user(tool_result) → assistant(resolved) → user(tool_result) → user.
+	if len(turns[0].ToolCalls) == 0 {
+		t.Fatal("turns[0] has no ToolCalls")
+	}
+	if turns[0].ToolCalls[0].Output != "task output" {
+		t.Errorf("turns[0].ToolCalls[0].Output = %q, want %q",
+			turns[0].ToolCalls[0].Output, "task output")
+	}
+	if len(turns[2].ToolCalls) == 0 {
+		t.Fatal("turns[2] has no ToolCalls")
+	}
+	if turns[2].ToolCalls[0].Output != "xray output" {
+		t.Errorf("turns[2].ToolCalls[0].Output = %q, want %q",
+			turns[2].ToolCalls[0].Output, "xray output")
+	}
+}
+
 func TestResumeCmd(t *testing.T) {
 	a := New()
 	got := a.ResumeCmd("abc-123")

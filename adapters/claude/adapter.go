@@ -154,12 +154,69 @@ func (a *Adapter) StreamTurns(id string) (<-chan session.Turn, error) {
 		defer f.Close()
 		scanner := bufio.NewScanner(f)
 		scanner.Buffer(make([]byte, 0, 1024*1024), 10*1024*1024)
+
+		// pending holds assistant turns with unresolved tool calls.
+		// Tool_use ID → index into pending + ToolCalls for O(1) lookup.
+		var pending []session.Turn
+		idIdx := make(map[string][2]int) // tool_use_id → [pendingIdx, tcIdx]
+
+		flushAll := func() {
+			for _, t := range pending {
+				ch <- t
+			}
+			pending = pending[:0]
+			clear(idIdx)
+		}
+
 		for scanner.Scan() {
-			turn, ok := eventToTurn(scanner.Bytes())
-			if ok {
+			line := scanner.Bytes()
+			turn, ok := eventToTurn(line)
+			if !ok {
+				continue
+			}
+
+			// Try to resolve tool_result user turns into pending assistants.
+			if len(pending) > 0 && turn.Role == session.RoleUser {
+				if results := extractToolResultsFromLine(line); results != nil {
+					for useID, out := range results {
+						if idx, found := idIdx[useID]; found {
+							pending[idx[0]].ToolCalls[idx[1]].Output = out
+						}
+					}
+					// Flush any fully-resolved pending turns (in order).
+					for len(pending) > 0 && allResolved(pending[0]) {
+						ch <- pending[0]
+						// Clean up index entries for flushed turn.
+						for _, tc := range pending[0].ToolCalls {
+							delete(idIdx, tc.ID)
+						}
+						pending = pending[1:]
+						// Adjust remaining index entries.
+						for id, idx := range idIdx {
+							idIdx[id] = [2]int{idx[0] - 1, idx[1]}
+						}
+					}
+					ch <- turn
+					continue
+				}
+			}
+
+			// Another assistant with tool calls: accumulate.
+			if turn.Role == session.RoleAssistant && hasUnresolvedToolCalls(turn) {
+				pi := len(pending)
+				pending = append(pending, turn)
+				for ti, tc := range turn.ToolCalls {
+					if tc.ID != "" {
+						idIdx[tc.ID] = [2]int{pi, ti}
+					}
+				}
+			} else {
+				// Non-tool turn: flush all pending first.
+				flushAll()
 				ch <- turn
 			}
 		}
+		flushAll()
 	}()
 	return ch, nil
 }
@@ -437,6 +494,7 @@ func extractToolResultContent(raw json.RawMessage) string {
 }
 
 // extractToolCalls pulls tool_use blocks from message content.
+// The ID field is populated for later tool_result correlation.
 func extractToolCalls(raw json.RawMessage) []session.ToolCall {
 	if len(raw) == 0 {
 		return nil
@@ -444,6 +502,7 @@ func extractToolCalls(raw json.RawMessage) []session.ToolCall {
 
 	var blocks []struct {
 		Type  string          `json:"type"`
+		ID    string          `json:"id"`
 		Name  string          `json:"name"`
 		Input json.RawMessage `json:"input"`
 	}
@@ -456,13 +515,76 @@ func extractToolCalls(raw json.RawMessage) []session.ToolCall {
 		if b.Type != "tool_use" {
 			continue
 		}
-		tc := session.ToolCall{Name: b.Name}
+		tc := session.ToolCall{ID: b.ID, Name: b.Name}
 		if len(b.Input) > 0 {
 			tc.Input = string(b.Input)
 		}
 		calls = append(calls, tc)
 	}
 	return calls
+}
+
+// allResolved reports whether every tool call in the turn has output.
+func allResolved(t session.Turn) bool {
+	for _, tc := range t.ToolCalls {
+		if tc.ID != "" && tc.Output == "" {
+			return false
+		}
+	}
+	return true
+}
+
+// hasUnresolvedToolCalls reports whether any tool call has an ID
+// (meaning it expects a future tool_result resolution).
+func hasUnresolvedToolCalls(t session.Turn) bool {
+	for _, tc := range t.ToolCalls {
+		if tc.ID != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// extractToolResultsFromLine parses a raw JSONL line and returns the
+// tool_use_id → output map if the line is a user turn with tool_result
+// content blocks. Returns nil if not applicable.
+func extractToolResultsFromLine(line []byte) map[string]string {
+	var ev jsonlEvent
+	if err := json.Unmarshal(line, &ev); err != nil || ev.Type != "user" {
+		return nil
+	}
+	var msg messagePayload
+	if err := json.Unmarshal(ev.Message, &msg); err != nil {
+		return nil
+	}
+	return extractToolResults(msg.Content)
+}
+
+// extractToolResults returns a map of tool_use_id → output text
+// from a user turn's content blocks containing tool_result entries.
+func extractToolResults(raw json.RawMessage) map[string]string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var blocks []struct {
+		Type      string          `json:"type"`
+		ToolUseID string          `json:"tool_use_id"`
+		Content   json.RawMessage `json:"content"`
+	}
+	if err := json.Unmarshal(raw, &blocks); err != nil {
+		return nil
+	}
+	results := make(map[string]string)
+	for _, b := range blocks {
+		if b.Type != "tool_result" || b.ToolUseID == "" {
+			continue
+		}
+		results[b.ToolUseID] = extractToolResultContent(b.Content)
+	}
+	if len(results) == 0 {
+		return nil
+	}
+	return results
 }
 
 func parseTimestamp(s string) time.Time {

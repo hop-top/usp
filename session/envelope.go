@@ -57,4 +57,7 @@ type ToolCall struct {
 	Name   string `json:"name"`
 	Input  string `json:"input,omitempty"`
 	Output string `json:"output,omitempty"`
+	// ID is the tool_use block ID used to correlate with tool_result turns.
+	// Populated by adapters; not serialized.
+	ID string `json:"-"`
 }

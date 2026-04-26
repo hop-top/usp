@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -223,10 +224,94 @@ func TestExecClient_Upsert_HappyPath(t *testing.T) {
 		t.Fatalf("read log: %v", err)
 	}
 	s := string(got)
-	for _, w := range []string{"analyze", "--hints", "--source-key", p.SourceKey, "--wait"} {
+	// Primary identity = mentions; --source-key retained as secondary
+	// dedup hint per spec §4.4. --hints emitted only if non-empty.
+	for _, w := range []string{
+		"analyze",
+		"--mentions",
+		"@usp.session.fe2eb947-ecab-4293-a26c-3485062e8e6a",
+		"@agent.sami",
+		"@cli.claude",
+		"--source-key",
+		p.SourceKey,
+		"--wait",
+	} {
 		if !contains(s, w) {
 			t.Errorf("expected fake ctxt to receive %q; got log:\n%s", w, s)
 		}
+	}
+}
+
+// TestExecClient_OmitsEmptyHints: post-mentions, hints may be empty when
+// content-hash is the only signal — flag must not be passed empty.
+func TestExecClient_OmitsEmptyHints(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake ctxt is POSIX sh")
+	}
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "args.log")
+	bin := filepath.Join(dir, "ctxt")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + logPath + " ; cat >> " + logPath + " ; exit 0\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake ctxt: %v", err)
+	}
+	prev := CtxtBin
+	CtxtBin = bin
+	t.Cleanup(func() { CtxtBin = prev })
+
+	c := NewExecClient("")
+	// Hand-built projection with empty Hints.
+	p := Projection{
+		SourceKey:   "usp/empty-hints",
+		Mentions:    []string{"@usp.session.empty-hints", "@cli.claude"},
+		Hints:       nil,
+		Body:        "stub",
+		ContentHash: "deadbeef",
+	}
+	if err := c.Upsert(context.Background(), p); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+	got, _ := os.ReadFile(logPath)
+	s := string(got)
+	if contains(s, "--hints") {
+		t.Errorf("--hints should be omitted when Hints empty; got log:\n%s", s)
+	}
+	if !contains(s, "--mentions") {
+		t.Errorf("--mentions must always be passed; got log:\n%s", s)
+	}
+}
+
+// TestRun_Idempotent_MentionStableAcrossRuns: re-projecting the same session
+// produces identical Mentions list on a fresh Run, even when state is reset.
+// Belt-and-suspenders for spec §4.4 mention-based identity.
+func TestRun_Idempotent_MentionStableAcrossRuns(t *testing.T) {
+	t1 := time.Date(2026, 4, 25, 10, 0, 0, 0, time.UTC)
+	src := &fakeSource{
+		clis:  []string{"claude"},
+		lists: map[string][]session.Session{"claude": {mkSession("s-stable", "claude", t1)}},
+		turns: map[string][]session.Turn{"s-stable": {{Role: session.RoleUser, Content: "hi"}}},
+	}
+	rc1 := &recordingClient{}
+	rc2 := &recordingClient{}
+	st1 := &State{PerCLI: map[string]CLIState{}, Version: SchemaVersion}
+	st2 := &State{PerCLI: map[string]CLIState{}, Version: SchemaVersion}
+
+	if _, err := Run(context.Background(), src, rc1, st1, RunOpts{Agent: "sami"}); err != nil {
+		t.Fatalf("Run #1: %v", err)
+	}
+	if _, err := Run(context.Background(), src, rc2, st2, RunOpts{Agent: "sami"}); err != nil {
+		t.Fatalf("Run #2: %v", err)
+	}
+	if len(rc1.calls) != 1 || len(rc2.calls) != 1 {
+		t.Fatalf("expected 1 call per run; got %d / %d", len(rc1.calls), len(rc2.calls))
+	}
+	a, b := rc1.calls[0].MentionsString(), rc2.calls[0].MentionsString()
+	if a != b {
+		t.Errorf("mentions not stable across runs:\n  a=%q\n  b=%q", a, b)
+	}
+	want := "@usp.session.s-stable"
+	if !strings.Contains(a, want) {
+		t.Errorf("expected mention %q in %q", want, a)
 	}
 }
 

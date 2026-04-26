@@ -1,0 +1,13 @@
+graph LR
+  Cmd["usp session tools"] --> Filters["Filters:<br/>--session --cli --project<br/>--since --until<br/>--category --backing --name<br/>--family --outcome"]
+
+  Filters --> Pipeline["Pipeline"]
+  Pipeline --> Collect["1. Collect sessions<br/>(adapter fan-out)"]
+  Collect --> Stream["2. Stream Turns/ToolCalls"]
+  Stream --> Classify["3. Classify<br/>(category, backing, name,<br/>family, outcome)"]
+  Classify --> ApplyFilter["4. Apply filters"]
+  ApplyFilter --> Render["5. Render<br/>(table / json / yaml)"]
+
+  Cmd -. "view aliases (filtered)" .-> Skills["usp session skills<br/>= tools --category skill"]
+  Cmd -. "view aliases (filtered)" .-> Agents["usp session agents<br/>= tools --category agent"]
+  Cmd -. "single-session detail" .-> Show["usp session show &lt;id&gt;<br/>--tools / --skills / --agents"]

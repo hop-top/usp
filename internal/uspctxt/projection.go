@@ -5,6 +5,11 @@
 //
 //	<labspace>/hop/docs/ingestion-retrieval/spec.md §4
 //
+// Identity model (post T-0066 / T-0068): mentions, not tags. The
+// canonical session anchor is `@usp.session.<id>`; tags retain only
+// emergent classifier signals (`#hash:` for content fingerprinting).
+// `--source-key` is kept as a secondary dedup hint per spec §4.4.
+//
 // Two pure halves are kept here (projection + state) so the cmd
 // layer can wire them to os/exec + filesystem without bringing
 // either concern into the core. Tests live in projection_test.go
@@ -15,6 +20,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -36,16 +42,19 @@ const (
 // Projection is the ctxt-ready payload for a single session.
 //
 // Body: markdown text fed to ctxt via stdin / --file.
-// Hints: tag list joined into ctxt analyze --hints "<...>".
-// SourceKey: external dedup key (ctxt analyze --source-key).
-//   Format: "usp/<session-id>". ctxt upserts by source-key,
-//   delivering idempotency required by spec §4.4.
+// Mentions: canonical identity refs (`@namespace.slug`) joined into
+//   `ctxt analyze --mentions`. Primary identity per spec §4.4.
+// Hints: classifier tags joined into `ctxt analyze --hints`. v0.1
+//   only emits `#hash:<short>`; identity moved to mentions.
+// SourceKey: external dedup hint (`--source-key`); secondary signal
+//   for ctxt's external-id catalog. Format: "usp/<session-id>".
 //
 // ContentHash backs a fallback dedup path: callers can compare
 // hashes to short-circuit re-ingest of unchanged sessions before
 // invoking ctxt at all.
 type Projection struct {
 	SourceKey   string
+	Mentions    []string
 	Hints       []string
 	Body        string
 	ContentHash string
@@ -56,13 +65,17 @@ type ProjectOpts struct {
 	// Granularity = SessionGranularity (v0.1).
 	Granularity Granularity
 
-	// Agent is the producing aps profile id; emitted as #agent:<id>.
-	// Empty => agent tag omitted.
+	// Agent is the producing aps profile id; emitted as @agent.<id>.
+	// Empty => agent mention omitted.
 	Agent string
 
 	// LineageRoot is the first session ID in a cross-CLI lineage.
-	// Empty => session is its own root; #lineage-root tag omitted.
+	// Empty / equal to sess.ID => no @usp.lineage.<root> mention.
 	LineageRoot string
+
+	// Scope is logical routing scope; emitted as @scope.<value>.
+	// Empty => scope mention omitted.
+	Scope string
 
 	// MaxSummaryTurns caps user prompts in the Summary section.
 	// Zero => default 5.
@@ -91,15 +104,17 @@ func Project(sess session.Session, turns []session.Turn, opts ProjectOpts) Proje
 		opts.MaxBodyBytes = 8192
 	}
 
-	body := renderBody(sess, turns, opts)
+	mentions := buildMentions(sess, opts)
+	body := renderBody(sess, turns, opts, mentions)
 	if len(body) > opts.MaxBodyBytes {
 		body = body[:opts.MaxBodyBytes] + "\n\n_(body truncated)_\n"
 	}
 	hash := sha256Hex(body)
 
-	hints := buildHints(sess, opts, hash)
+	hints := buildHints(hash)
 	return Projection{
 		SourceKey:   "usp/" + sess.ID,
+		Mentions:    mentions,
 		Hints:       hints,
 		Body:        body,
 		ContentHash: hash,
@@ -111,29 +126,64 @@ func (p Projection) HintsString() string {
 	return strings.Join(p.Hints, " ")
 }
 
-func buildHints(sess session.Session, opts ProjectOpts, hash string) []string {
-	hints := []string{}
-	if opts.Agent != "" {
-		hints = append(hints, "#agent:"+opts.Agent)
-	}
-	if cli := strings.TrimSpace(string(sess.CLI)); cli != "" {
-		hints = append(hints, "#cli:"+cli)
-	}
-	if cwd := strings.TrimSpace(sess.ProjectCwd); cwd != "" {
-		hints = append(hints, "#project:"+cwd)
-	}
-	hints = append(hints, "#session:"+sess.ID)
-	root := opts.LineageRoot
-	if root != "" && root != sess.ID {
-		hints = append(hints, "#lineage-root:"+root)
-	}
-	hints = append(hints, "#hash:"+hash[:16])
-	return hints
+// MentionsString joins mentions with single spaces for ctxt --mentions.
+func (p Projection) MentionsString() string {
+	return strings.Join(p.Mentions, " ")
 }
 
-func renderBody(sess session.Session, turns []session.Turn, opts ProjectOpts) string {
+// buildMentions emits the canonical identity refs in spec-prescribed
+// order: @usp.session, @agent, @cli, @project, @usp.lineage, @scope.
+// Slugs lowercased per mentions.md §Syntax. Anchor is @usp.session;
+// other namespaces are conditional on inputs being non-empty.
+func buildMentions(sess session.Session, opts ProjectOpts) []string {
+	out := []string{}
+	out = append(out, "@usp.session."+strings.ToLower(strings.TrimSpace(sess.ID)))
+	if opts.Agent != "" {
+		out = append(out, "@agent."+strings.ToLower(strings.TrimSpace(opts.Agent)))
+	}
+	if cli := strings.ToLower(strings.TrimSpace(string(sess.CLI))); cli != "" {
+		out = append(out, "@cli."+cli)
+	}
+	if slug := projectSlug(sess.ProjectCwd); slug != "" {
+		out = append(out, "@project."+slug)
+	}
+	root := strings.TrimSpace(opts.LineageRoot)
+	if root != "" && root != sess.ID {
+		out = append(out, "@usp.lineage."+strings.ToLower(root))
+	}
+	if scope := strings.ToLower(strings.TrimSpace(opts.Scope)); scope != "" {
+		out = append(out, "@scope."+scope)
+	}
+	return out
+}
+
+// projectSlug normalizes a cwd into a `@project.<slug>` per registry
+// mint rule: basename, lowercased, `.` → `-`. Empty cwd => empty.
+func projectSlug(cwd string) string {
+	cwd = strings.TrimSpace(cwd)
+	if cwd == "" {
+		return ""
+	}
+	base := filepath.Base(cwd)
+	base = strings.ToLower(base)
+	base = strings.ReplaceAll(base, ".", "-")
+	return base
+}
+
+// buildHints retains only the content-hash classifier; identity tags
+// have moved to mentions per spec §8.2.
+func buildHints(hash string) []string {
+	return []string{"#hash:" + hash[:16]}
+}
+
+func renderBody(sess session.Session, turns []session.Turn, opts ProjectOpts, mentions []string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Session %s\n\n", sess.ID)
+	if len(mentions) > 0 {
+		// Embedded for ctxt's inline mention parser; --mentions flag
+		// remains the source of truth for determinism.
+		fmt.Fprintf(&b, "Mentions: %s\n\n", strings.Join(mentions, " "))
+	}
 	fmt.Fprintf(&b, "- CLI: %s\n", sess.CLI)
 	if sess.ProjectCwd != "" {
 		fmt.Fprintf(&b, "- Project: %s\n", sess.ProjectCwd)

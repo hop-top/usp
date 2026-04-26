@@ -29,3 +29,5 @@ controlled record of how the work happened.
   folders MAY include `session.md` archives for completed
   tracks.
 - Existing command — story documents the typical-use contract.
+
+Covered by: `e2e/session_show_test.go`

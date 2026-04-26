@@ -17,10 +17,14 @@ import (
 )
 
 // ID-format regexes for adapter priority hinting.
+//
+// TypeID (sess_…) is treated as cross-CLI — order falls back to
+// the default since the TypeID alone doesn't tell us which CLI
+// produced the session.
 var (
-	reUUIDv4    = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
-	reUUIDv7    = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
-	reOpenCode  = regexp.MustCompile(`^ses_[a-z0-9]{26}$`)
+	reUUIDv4   = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	reUUIDv7   = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	reOpenCode = regexp.MustCompile(`^ses_[a-z0-9]{26}$`)
 )
 
 func allAdapters() map[string]session.SessionAdapter {
@@ -49,13 +53,14 @@ func adapterOrder(id string) []string {
 // showResult is the unified payload for session show across all formats.
 // Table format renders the top-level metadata; JSON/YAML includes turns.
 type showResult struct {
-	ID        string     `table:"ID"      json:"id"`
-	CLI       string     `table:"CLI"     json:"cli"`
-	Project   string     `table:"PROJECT" json:"project"`
-	StartedAt string     `table:"STARTED" json:"started_at"`
-	EndedAt   string     `table:"ENDED"   json:"ended_at"`
-	TurnCount int        `table:"TURNS"   json:"turn_count"`
-	Turns     []showTurn `table:"-"       json:"turns"`
+	ID        string     `table:"ID"       json:"id"`
+	NativeID  string     `table:"-"        json:"native_id,omitempty"`
+	CLI       string     `table:"CLI"      json:"cli"`
+	Project   string     `table:"PROJECT"  json:"project"`
+	StartedAt string     `table:"STARTED"  json:"started_at"`
+	EndedAt   string     `table:"ENDED"    json:"ended_at"`
+	TurnCount int        `table:"TURNS"    json:"turn_count"`
+	Turns     []showTurn `table:"-"        json:"turns"`
 }
 
 type showTurn struct {
@@ -100,7 +105,8 @@ func sessionShowCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			ch, err := a.StreamTurns(sess.ID)
+			// Adapter file/db lookups need the native id.
+			ch, err := a.StreamTurns(sess.NativeID)
 			var turns []showTurn
 			if err == nil {
 				for turn := range ch {
@@ -120,6 +126,7 @@ func sessionShowCmd() *cobra.Command {
 
 			return output.Render(os.Stdout, output.Format(format), showResult{
 				ID:        sess.ID,
+				NativeID:  sess.NativeID,
 				CLI:       matchedCLI,
 				Project:   sess.ProjectCwd,
 				StartedAt: sess.StartedAt.Format("2006-01-02 15:04:05"),

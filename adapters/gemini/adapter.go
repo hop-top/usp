@@ -126,11 +126,11 @@ func (a *Adapter) listAlias(histRoot, alias, cwd string) ([]session.Session, err
 		tag := strings.TrimSuffix(name, ".json")
 		info, _ := e.Info()
 		s := session.Session{
-			ID:         tag,
 			CLI:        uxp.CLIGemini,
 			ProjectCwd: cwd,
 			TurnCount:  0,
 		}
+		s.SetIDs(tag)
 		if info != nil {
 			s.StartedAt = info.ModTime()
 		}
@@ -159,11 +159,11 @@ func (a *Adapter) GetSession(id string) (*session.Session, error) {
 			continue
 		}
 		s := &session.Session{
-			ID:         id,
 			CLI:        uxp.CLIGemini,
 			ProjectCwd: cwd,
 			StartedAt:  info.ModTime(),
 		}
+		s.SetIDs(id)
 		return s, nil
 	}
 

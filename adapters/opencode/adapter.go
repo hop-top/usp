@@ -151,13 +151,13 @@ func (a *Adapter) ListSessions(cwd string) ([]session.Session, error) {
 		}
 
 		s := session.Session{
-			ID:         id,
 			CLI:        uxp.CLIOpenCode,
 			ProjectCwd: cwd,
 			StartedAt:  msToTime(createdAt),
 			TurnCount:  turnCount,
 			Metadata:   make(map[string]any),
 		}
+		s.SetIDs(id)
 		if title.Valid && title.String != "" {
 			s.Metadata["title"] = title.String
 		}
@@ -200,12 +200,12 @@ func (a *Adapter) GetSession(id string) (*session.Session, error) {
 	).Scan(&turnCount)
 
 	s := &session.Session{
-		ID:        id,
 		CLI:       uxp.CLIOpenCode,
 		StartedAt: msToTime(createdAt),
 		TurnCount: turnCount,
 		Metadata:  make(map[string]any),
 	}
+	s.SetIDs(id)
 	if directory.Valid {
 		s.ProjectCwd = directory.String
 	}

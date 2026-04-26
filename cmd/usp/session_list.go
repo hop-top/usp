@@ -13,13 +13,18 @@ import (
 )
 
 // sessionRow is the table-renderable projection of a session.
+//
+// Table view shows the truncated TypeID (the canonical user-facing
+// handle). JSON view exposes both the canonical id and the native
+// CLI id so existing scripts that grep for native UUIDs keep working.
 type sessionRow struct {
-	ID      string `table:"ID"      json:"-"`
-	FullID  string `table:"-"       json:"id"`
-	CLI     string `table:"CLI"     json:"cli"`
-	Project string `table:"PROJECT" json:"project"`
-	Started string `table:"STARTED" json:"started"`
-	Turns   int    `table:"TURNS"   json:"turns"`
+	ID       string `table:"ID"      json:"-"`
+	FullID   string `table:"-"       json:"id"`
+	NativeID string `table:"-"       json:"native_id,omitempty"`
+	CLI      string `table:"CLI"     json:"cli"`
+	Project  string `table:"PROJECT" json:"project"`
+	Started  string `table:"STARTED" json:"started"`
+	Turns    int    `table:"TURNS"   json:"turns"`
 }
 
 func sessionListCmd() *cobra.Command {
@@ -110,7 +115,8 @@ func sessionSearchCmd() *cobra.Command {
 				if !ok {
 					continue
 				}
-				ch, err := a.StreamTurns(s.ID)
+				// Adapter lookups go through the native id.
+				ch, err := a.StreamTurns(s.NativeID)
 				if err != nil {
 					continue
 				}
@@ -159,12 +165,13 @@ func toRows(ss []session.Session) []sessionRow {
 	rows := make([]sessionRow, len(ss))
 	for i, s := range ss {
 		rows[i] = sessionRow{
-			ID:      truncateID(s.ID, 12),
-			FullID:  s.ID,
-			CLI:     string(s.CLI),
-			Project: s.ProjectCwd,
-			Started: relativeTime(s.StartedAt),
-			Turns:   s.TurnCount,
+			ID:       truncateID(s.ID, 16),
+			FullID:   s.ID,
+			NativeID: s.NativeID,
+			CLI:      string(s.CLI),
+			Project:  s.ProjectCwd,
+			Started:  relativeTime(s.StartedAt),
+			Turns:    s.TurnCount,
 		}
 	}
 	return rows

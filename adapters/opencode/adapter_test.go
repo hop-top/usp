@@ -204,8 +204,8 @@ func TestListSessions(t *testing.T) {
 	}
 
 	s := sessions[0]
-	if s.ID != "ses_abc123" {
-		t.Errorf("ID = %q, want %q", s.ID, "ses_abc123")
+	if s.NativeID != "ses_abc123" {
+		t.Errorf("NativeID = %q, want %q", s.NativeID, "ses_abc123")
 	}
 	if s.CLI != uxp.CLIOpenCode {
 		t.Errorf("CLI = %q, want %q", s.CLI, uxp.CLIOpenCode)
@@ -245,8 +245,8 @@ func TestGetSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSession: %v", err)
 	}
-	if s.ID != "ses_abc123" {
-		t.Errorf("ID = %q, want %q", s.ID, "ses_abc123")
+	if s.NativeID != "ses_abc123" {
+		t.Errorf("NativeID = %q, want %q", s.NativeID, "ses_abc123")
 	}
 	if s.ProjectCwd != "/foo/bar" {
 		t.Errorf("ProjectCwd = %q, want /foo/bar", s.ProjectCwd)

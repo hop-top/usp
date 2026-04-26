@@ -374,11 +374,12 @@ func readSessionFile(path string) (*sessionMeta, int, error) {
 
 func metaToSession(meta *sessionMeta, lineCount int) *session.Session {
 	s := &session.Session{
-		ID: meta.Payload.ID, CLI: uxp.CLICodex,
+		CLI:        uxp.CLICodex,
 		ProjectCwd: meta.Payload.CWD,
 		TurnCount:  lineCount - 1,
 		Metadata:   make(map[string]any),
 	}
+	s.SetIDs(meta.Payload.ID)
 	if t, err := time.Parse(time.RFC3339Nano, meta.Payload.Timestamp); err == nil {
 		s.StartedAt = t
 	} else if t, err := time.Parse(time.RFC3339Nano, meta.Timestamp); err == nil {

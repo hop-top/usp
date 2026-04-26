@@ -17,7 +17,7 @@ func sessionLineageCmd() *cobra.Command {
 		Short: "Show cross-CLI session lineage",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			id := args[0]
+			input := args[0]
 
 			home, err := os.UserHomeDir()
 			if err != nil {
@@ -27,13 +27,16 @@ func sessionLineageCmd() *cobra.Command {
 
 			store, err := lineage.Open(dbPath)
 			if err != nil {
-				return tryNativeLineage(id)
+				return tryNativeLineage(input)
 			}
 			defer store.Close()
 
-			sess, err := store.GetSession(id)
+			// Lineage store keys by native id today; if user passed
+			// a TypeID, fall through to the native adapter resolver
+			// which knows both forms.
+			sess, err := store.GetSession(input)
 			if err != nil {
-				return tryNativeLineage(id)
+				return tryNativeLineage(input)
 			}
 
 			printLineage(sess)
@@ -52,7 +55,7 @@ func tryNativeLineage(id string) error {
 	}
 	s.Segments = []session.Segment{{
 		CLI:       s.CLI,
-		NativeID:  s.ID,
+		NativeID:  s.NativeID,
 		StartedAt: s.StartedAt,
 		TurnCount: s.TurnCount,
 	}}

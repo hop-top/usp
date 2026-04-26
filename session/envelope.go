@@ -6,22 +6,31 @@ import (
 	"time"
 
 	"hop.top/kit/uxp"
+	"hop.top/usp/internal/id"
 )
 
 // Session is the normalized USP session envelope representing a
 // single coding session from any supported CLI. A session may span
 // multiple CLIs via segments — each segment is one CLI's contribution
 // to the conversation.
+//
+// ID is the canonical TypeID (e.g. sess_…) — the user-facing handle
+// for resume/lineage/show. NativeID preserves the underlying CLI
+// session identifier (UUIDv4 for Claude, UUIDv7 for Codex, ses_…
+// for OpenCode, tag for Gemini) so usp can still locate the
+// vendor file on disk. Both forms are accepted everywhere a session
+// id is taken — see internal/sessionutil.ResolveSessionID.
 type Session struct {
-	ID         string            `json:"id"`
-	CLI        uxp.CLIName       `json:"cli"`
-	ProjectCwd string            `json:"project_cwd"`
-	StartedAt  time.Time         `json:"started_at"`
-	EndedAt    *time.Time        `json:"ended_at,omitempty"`
-	TurnCount  int               `json:"turn_count"`
-	Metadata   map[string]any    `json:"metadata,omitempty"`
-	Segments   []Segment         `json:"segments,omitempty"`
-	ParentID   string            `json:"parent_id,omitempty"`
+	ID         string         `json:"id"`
+	NativeID   string         `json:"native_id,omitempty"`
+	CLI        uxp.CLIName    `json:"cli"`
+	ProjectCwd string         `json:"project_cwd"`
+	StartedAt  time.Time      `json:"started_at"`
+	EndedAt    *time.Time     `json:"ended_at,omitempty"`
+	TurnCount  int            `json:"turn_count"`
+	Metadata   map[string]any `json:"metadata,omitempty"`
+	Segments   []Segment      `json:"segments,omitempty"`
+	ParentID   string         `json:"parent_id,omitempty"`
 }
 
 // Segment records one CLI's contribution to a cross-CLI session.
@@ -60,4 +69,20 @@ type ToolCall struct {
 	// ID is the tool_use block ID used to correlate with tool_result turns.
 	// Populated by adapters; not serialized.
 	ID string `json:"-"`
+}
+
+// SetIDs populates ID with a derived TypeID and NativeID with the
+// adapter-supplied native session id. Adapters MUST call this when
+// building a Session so resolver lookups work on either form.
+//
+// On encoding error (e.g. empty native), ID is set to native as a
+// fallback — better to surface an unfamiliar id than to drop it.
+func (s *Session) SetIDs(native string) {
+	s.NativeID = native
+	tid, err := id.EncodeFromNative(id.PrefixSession, native)
+	if err != nil {
+		s.ID = native
+		return
+	}
+	s.ID = tid
 }

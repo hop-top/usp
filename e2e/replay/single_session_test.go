@@ -268,13 +268,13 @@ func verifyLifecycle(
 	}
 	found := false
 	for _, s := range sessions {
-		if s.ID == wantID {
+		if s.NativeID == wantID {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("ListSessions did not contain session %q", wantID)
+		t.Errorf("ListSessions did not contain native session %q", wantID)
 	}
 
 	// 2. GetSession

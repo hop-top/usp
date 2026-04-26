@@ -22,6 +22,41 @@ Implement one interface, get detection + diagnostics free.
 `usp session list --project .` — every assistant's sessions
 for this directory, newest first.
 
+**"I want my session history queryable as part of my knowledge
+graph."**
+USP ships a companion bridge, `usp-ctxt`, that walks every
+detected CLI's session list and projects each session into a
+[ctxt](https://github.com/jadb/ContextHelp) knowledge object.
+Once bridged, your sessions are searchable next to your notes,
+documents, and other captured context — and they participate in
+ctxt's entity graph via stable mentions like
+`@usp.session.<uuid>`, `@cli.<name>`, and `@agent.<id>`.
+
+## The ctxt bridge
+
+`usp-ctxt sync` is a separate binary in this repo
+([cmd/usp-ctxt/](cmd/usp-ctxt/)). It's idempotent: re-running
+over the same session updates the matching ctxt entity rather
+than creating duplicates, and a high-water-mark file at
+`~/.local/share/usp-ctxt/last_run.json` tracks per-CLI
+progress so subsequent runs only ingest new sessions.
+
+```sh
+go install hop.top/usp/cmd/usp-ctxt@latest
+
+usp-ctxt sync                        # walk all CLIs since last run
+usp-ctxt sync --tool claude          # only Claude Code sessions
+usp-ctxt sync --project ~/code/myapp # only sessions in this project
+usp-ctxt sync --dry-run              # project + log; do not write
+```
+
+Run it on cron, after each work block, or whenever you want
+your session history reflected in ctxt. The full ingestion +
+retrieval design — including the live-capture path that runs
+on top of UHP, and the three retrieval shapes built on the
+combined data — lives in §4 of the spec at
+<https://github.com/hop-top/hop/blob/main/docs/ingestion-retrieval/spec.md>.
+
 ## The killer feature: cross-CLI resume
 
 Start in one assistant, continue in another. Full context

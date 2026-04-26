@@ -1,0 +1,21 @@
+graph TD
+  TC["session.ToolCall<br/>(name, input, output)"] --> Class["Classifier"]
+
+  Class --> CatNative["category: native<br/>Read/Edit/Write/Grep/Glob/<br/>NotebookEdit/WebFetch/WebSearch"]
+  Class --> CatBash["category: bash<br/>(name == 'Bash')"]
+  Class --> CatMCP["category: mcp<br/>(name matches mcp__*)"]
+  Class --> CatSkill["category: skill<br/>(name == 'Skill' or '/' alias)"]
+  Class --> CatAgent["category: agent<br/>(name == 'Task')"]
+
+  CatBash --> BashLeading["Sub-extract<br/>leading binary<br/>(ctxt / gh / tlc / make / git …)"]
+  CatMCP --> MCPSplit["Split mcp__&lt;server&gt;__&lt;tool&gt;<br/>backing = server, name = tool"]
+
+  CatNative --> Family["family: action / lookup / mixed"]
+  BashLeading --> Family
+  MCPSplit --> Family
+  CatSkill --> Family
+  CatAgent --> Family
+
+  Family --> Lookup["lookup family<br/>outcome ∈ {conclusive,<br/>partial, noise, unknown}"]
+  Family --> Action["action family<br/>outcome ∈ {success,<br/>fail, unknown}"]
+  Family --> Mixed["mixed family<br/>(Bash with side-effects:<br/>derived per-binary)"]

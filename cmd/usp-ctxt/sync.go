@@ -174,8 +174,8 @@ func (s *adapterSource) LineageRoot(sessionID string) (string, error) {
 type dryRunClient struct{ w io.Writer }
 
 func (d dryRunClient) Upsert(_ context.Context, p uspctxt.Projection) error {
-	fmt.Fprintf(d.w, "[dry-run] source-key=%s hints=%q bytes=%d\n",
-		p.SourceKey, p.HintsString(), len(p.Body))
+	fmt.Fprintf(d.w, "[dry-run] source-key=%s mentions=%q hints=%q bytes=%d\n",
+		p.SourceKey, p.MentionsString(), p.HintsString(), len(p.Body))
 	return nil
 }
 
@@ -186,7 +186,7 @@ type verboseClient struct {
 }
 
 func (v verboseClient) Upsert(ctx context.Context, p uspctxt.Projection) error {
-	fmt.Fprintf(v.w, "upsert source-key=%s hints=%q bytes=%d\n",
-		p.SourceKey, p.HintsString(), len(p.Body))
+	fmt.Fprintf(v.w, "upsert source-key=%s mentions=%q hints=%q bytes=%d\n",
+		p.SourceKey, p.MentionsString(), p.HintsString(), len(p.Body))
 	return v.inner.Upsert(ctx, p)
 }

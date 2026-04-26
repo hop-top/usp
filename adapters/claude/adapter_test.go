@@ -176,8 +176,11 @@ func TestListSessions(t *testing.T) {
 	}
 
 	s := sessions[0]
-	if s.ID != "sess-abc" {
-		t.Errorf("ID = %q, want %q", s.ID, "sess-abc")
+	if s.NativeID != "sess-abc" {
+		t.Errorf("NativeID = %q, want %q", s.NativeID, "sess-abc")
+	}
+	if s.ID == "" {
+		t.Error("ID (TypeID) should be populated")
 	}
 	if s.CLI != uxp.CLIClaude {
 		t.Errorf("CLI = %q, want %q", s.CLI, uxp.CLIClaude)
@@ -203,8 +206,8 @@ func TestGetSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSession: %v", err)
 	}
-	if s.ID != "sess-abc" {
-		t.Errorf("ID = %q, want %q", s.ID, "sess-abc")
+	if s.NativeID != "sess-abc" {
+		t.Errorf("NativeID = %q, want %q", s.NativeID, "sess-abc")
 	}
 	if s.ProjectCwd != "/foo/bar" {
 		t.Errorf("ProjectCwd = %q, want %q", s.ProjectCwd, "/foo/bar")

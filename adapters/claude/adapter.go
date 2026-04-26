@@ -374,11 +374,11 @@ func (a *Adapter) parseSession(
 	defer f.Close()
 
 	s := &session.Session{
-		ID:         id,
 		CLI:        uxp.CLIClaude,
 		ProjectCwd: cwd,
 		Metadata:   make(map[string]any),
 	}
+	s.SetIDs(id)
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)

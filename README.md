@@ -146,31 +146,37 @@ usp session lineage <id>      # cross-CLI conversation history
 
 ### `usp session list --since 2d`
 
-```
-ID             CLI     PROJECT                    STARTED  TURNS
-8c470754-d69…  claude  ~/projects/tlc             1h ago   32
-34534e3e-210…  claude  ~/projects/uhp             1h ago   499
-827d6683-2f5…  claude  ~/projects/kit             1h ago   292
-33ba162b-1e9…  claude  ~/projects/usp             2h ago   649
-41c697cf-1f4…  claude  ~/projects/tep             4h ago   95
-3f937c7d-7db…  claude  ~/projects/kit             5h ago   374
-d6607e6d-d91…  claude  ~/projects/tip             10h ago  1919
-cfe5b6d0-9a2…  claude  ~/projects/xray            21h ago  13
-af1242d5-1c1…  claude  ~/projects/xray            21h ago  458
-5f11d831-882…  claude  ~/skills                   22h ago  801
-db43cfac-543…  claude  ~/projects/xray            1d ago   93
-fe2eb947-eca…  claude  ~/projects/tlc             1d ago   142
-```
-
-### `usp session show fe2eb947-eca…`
+IDs are TypeIDs (`sess_…`) — type-safe, prefixed, k-sortable.
+Native CLI session ids (UUIDs, `ses_…` for OpenCode) still work
+anywhere a session id is expected. JSON output includes both via
+`id` and `native_id`.
 
 ```
-Session: fe2eb947-ecab-4293-a26c-3485062e8e6a
-CLI:     claude
-Project: ~/projects/tlc
-Started: 2026-04-10 04:40:25
-Ended:   2026-04-10 05:08:20
-Turns:   142
+ID                CLI     PROJECT                    STARTED  TURNS
+sess_01h455vb4p…  claude  ~/projects/tlc             1h ago   32
+sess_01h455w8ke…  claude  ~/projects/uhp             1h ago   499
+sess_01h455yn3a…  claude  ~/projects/kit             1h ago   292
+sess_01h456b2qx…  claude  ~/projects/usp             2h ago   649
+sess_01h457dvkm…  claude  ~/projects/tep             4h ago   95
+```
+
+### `usp session show sess_01h455vb4p…`
+
+Either form resolves the same session:
+
+```sh
+usp session show sess_01h455vb4pex5vsknk084sn02q  # TypeID
+usp session show fe2eb947-eca…                    # native UUID prefix
+```
+
+```
+ID:        sess_01h455vb4pex5vsknk084sn02q
+NativeID:  fe2eb947-ecab-4293-a26c-3485062e8e6a
+CLI:       claude
+Project:   ~/projects/tlc
+Started:   2026-04-10 04:40:25
+Ended:     2026-04-10 05:08:20
+Turns:     142
 
 Turn 1 [system] 2026-04-10 04:40:25
 

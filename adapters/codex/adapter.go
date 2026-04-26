@@ -403,11 +403,12 @@ func extractTurnContextModel(line []byte) string {
 
 func metaToSession(meta *sessionMeta, scan fileScan) *session.Session {
 	s := &session.Session{
-		ID: meta.Payload.ID, CLI: uxp.CLICodex,
+		CLI:        uxp.CLICodex,
 		ProjectCwd: meta.Payload.CWD,
 		TurnCount:  scan.lineCount - 1,
 		Metadata:   make(map[string]any),
 	}
+	s.SetIDs(meta.Payload.ID)
 	if t, err := time.Parse(time.RFC3339Nano, meta.Payload.Timestamp); err == nil {
 		s.StartedAt = t
 	} else if t, err := time.Parse(time.RFC3339Nano, meta.Timestamp); err == nil {

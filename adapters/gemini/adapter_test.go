@@ -150,7 +150,7 @@ func TestListSessions_WithChatFiles(t *testing.T) {
 
 	ids := map[string]bool{}
 	for _, s := range sessions {
-		ids[s.ID] = true
+		ids[s.NativeID] = true
 		if s.CLI != uxp.CLIGemini {
 			t.Errorf("session CLI = %q, want %q", s.CLI, uxp.CLIGemini)
 		}
@@ -159,7 +159,7 @@ func TestListSessions_WithChatFiles(t *testing.T) {
 		}
 	}
 	if !ids["refactor-db"] || !ids["add-auth"] {
-		t.Errorf("unexpected session IDs: %v", ids)
+		t.Errorf("unexpected native session IDs: %v", ids)
 	}
 }
 
@@ -194,8 +194,8 @@ func TestGetSession_Found(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSession() error: %v", err)
 	}
-	if s.ID != "my-chat" {
-		t.Errorf("ID = %q, want %q", s.ID, "my-chat")
+	if s.NativeID != "my-chat" {
+		t.Errorf("NativeID = %q, want %q", s.NativeID, "my-chat")
 	}
 	if s.ProjectCwd != cwd {
 		t.Errorf("ProjectCwd = %q, want %q", s.ProjectCwd, cwd)
@@ -441,7 +441,7 @@ func TestInjectSession(t *testing.T) {
 	}
 	found := false
 	for _, s := range sessions {
-		if s.ID == tag {
+		if s.NativeID == tag {
 			found = true
 		}
 	}
@@ -454,7 +454,7 @@ func TestInjectSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSession(%q) error: %v", tag, err)
 	}
-	if s.ID != tag || s.CLI != uxp.CLIGemini {
+	if s.NativeID != tag || s.CLI != uxp.CLIGemini {
 		t.Errorf("GetSession() = %+v", s)
 	}
 

@@ -21,6 +21,7 @@ import (
 // showResult mirrors cmd/usp.showResult for JSON round-trip assertions.
 type showResult struct {
 	ID        string     `json:"id"`
+	NativeID  string     `json:"native_id,omitempty"`
 	CLI       string     `json:"cli"`
 	Project   string     `json:"project"`
 	StartedAt string     `json:"started_at"`
@@ -42,7 +43,7 @@ func buildShowResult(
 	matchedCLI string,
 	a session.SessionAdapter,
 ) showResult {
-	ch, err := a.StreamTurns(sess.ID)
+	ch, err := a.StreamTurns(sess.NativeID)
 	var turns []showTurn
 	if err == nil {
 		for turn := range ch {
@@ -60,6 +61,7 @@ func buildShowResult(
 	}
 	return showResult{
 		ID:        sess.ID,
+		NativeID:  sess.NativeID,
 		CLI:       matchedCLI,
 		Project:   sess.ProjectCwd,
 		StartedAt: sess.StartedAt.Format("2006-01-02 15:04:05"),
@@ -88,8 +90,8 @@ func TestSessionShow_ValidClaudeID(t *testing.T) {
 
 	res := buildShowResult(sess, matchedCLI, adapter)
 
-	if res.ID != "claude-sess-01" {
-		t.Errorf("ID = %q, want %q", res.ID, "claude-sess-01")
+	if res.NativeID != "claude-sess-01" {
+		t.Errorf("NativeID = %q, want %q", res.NativeID, "claude-sess-01")
 	}
 	if res.CLI != string(uxp.CLIClaude) {
 		t.Errorf("CLI = %q, want %q", res.CLI, uxp.CLIClaude)
@@ -466,8 +468,8 @@ func TestSessionShow_CrossCliDisambiguation(t *testing.T) {
 	if matchedCLI != string(uxp.CLIClaude) {
 		t.Errorf("matched CLI = %q, want %q", matchedCLI, uxp.CLIClaude)
 	}
-	if sess.ID != "shared-id-sess" {
-		t.Errorf("ID = %q, want %q", sess.ID, "shared-id-sess")
+	if sess.NativeID != "shared-id-sess" {
+		t.Errorf("NativeID = %q, want %q", sess.NativeID, "shared-id-sess")
 	}
 
 	// Codex-scoped lookup should find its own session.
@@ -484,8 +486,9 @@ func TestSessionShow_CrossCliDisambiguation(t *testing.T) {
 	if codexCLI != string(uxp.CLICodex) {
 		t.Errorf("Codex matched CLI = %q, want %q", codexCLI, uxp.CLICodex)
 	}
-	if codexSess.ID != "codex-uniq-sess" {
-		t.Errorf("Codex ID = %q, want %q", codexSess.ID, "codex-uniq-sess")
+	if codexSess.NativeID != "codex-uniq-sess" {
+		t.Errorf("Codex NativeID = %q, want %q",
+			codexSess.NativeID, "codex-uniq-sess")
 	}
 }
 

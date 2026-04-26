@@ -148,8 +148,8 @@ func TestMultiCliSessionSharing(t *testing.T) {
 		if len(ss) != 1 {
 			t.Fatalf("%s sessions = %d, want 1", name, len(ss))
 		}
-		if ss[0].ID != tc.id {
-			t.Errorf("%s id = %q, want %q", name, ss[0].ID, tc.id)
+		if ss[0].NativeID != tc.id {
+			t.Errorf("%s native_id = %q, want %q", name, ss[0].NativeID, tc.id)
 		}
 	}
 
@@ -161,8 +161,9 @@ func TestMultiCliSessionSharing(t *testing.T) {
 	if len(gemSessions) != 1 {
 		t.Fatalf("gemini sessions = %d, want 1", len(gemSessions))
 	}
-	if gemSessions[0].ID != geminiID {
-		t.Errorf("gemini session ID = %q, want %q", gemSessions[0].ID, geminiID)
+	if gemSessions[0].NativeID != geminiID {
+		t.Errorf("gemini session NativeID = %q, want %q",
+			gemSessions[0].NativeID, geminiID)
 	}
 
 	// Aggregate across all adapters (unified view).

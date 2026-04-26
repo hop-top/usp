@@ -140,8 +140,8 @@ func TestListSessionsWalk(t *testing.T) {
 	if s.TurnCount != 2 {
 		t.Errorf("turn_count = %d, want 2", s.TurnCount)
 	}
-	if s.ID != "019cb730-aaaa-7000-bbbb-ccccddddeeee" {
-		t.Errorf("id = %q, want uuid", s.ID)
+	if s.NativeID != "019cb730-aaaa-7000-bbbb-ccccddddeeee" {
+		t.Errorf("native_id = %q, want uuid", s.NativeID)
 	}
 }
 

@@ -18,9 +18,9 @@ import (
 
 // ID-format regexes for adapter priority hinting.
 var (
-	reUUIDv4    = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
-	reUUIDv7    = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
-	reOpenCode  = regexp.MustCompile(`^ses_[a-z0-9]{26}$`)
+	reUUIDv4   = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	reUUIDv7   = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	reOpenCode = regexp.MustCompile(`^ses_[a-z0-9]{26}$`)
 )
 
 func allAdapters() map[string]session.SessionAdapter {
@@ -49,13 +49,14 @@ func adapterOrder(id string) []string {
 // showResult is the unified payload for session show across all formats.
 // Table format renders the top-level metadata; JSON/YAML includes turns.
 type showResult struct {
-	ID        string     `table:"ID"      json:"id"`
-	CLI       string     `table:"CLI"     json:"cli"`
-	Project   string     `table:"PROJECT" json:"project"`
-	StartedAt string     `table:"STARTED" json:"started_at"`
-	EndedAt   string     `table:"ENDED"   json:"ended_at"`
-	TurnCount int        `table:"TURNS"   json:"turn_count"`
-	Turns     []showTurn `table:"-"       json:"turns"`
+	ID        string               `table:"ID"      json:"id"`
+	CLI       string               `table:"CLI"     json:"cli"`
+	Project   string               `table:"PROJECT" json:"project"`
+	StartedAt string               `table:"STARTED" json:"started_at"`
+	EndedAt   string               `table:"ENDED"   json:"ended_at"`
+	TurnCount int                  `table:"TURNS"   json:"turn_count"`
+	Turns     []showTurn           `table:"-"       json:"turns"`
+	Skills    []session.SkillEvent `table:"-"       json:"skills,omitempty"`
 }
 
 type showTurn struct {
@@ -67,10 +68,11 @@ type showTurn struct {
 
 func sessionShowCmd() *cobra.Command {
 	var (
-		cliFlag string
-		format  string
-		project string
-		since   string
+		cliFlag    string
+		format     string
+		project    string
+		since      string
+		showSkills bool
 	)
 
 	cmd := &cobra.Command{
@@ -118,7 +120,23 @@ func sessionShowCmd() *cobra.Command {
 				ended = sess.EndedAt.Format("2006-01-02 15:04:05")
 			}
 
-			return output.Render(os.Stdout, output.Format(format), showResult{
+			var skills []session.SkillEvent
+			if showSkills {
+				if ext, ok := a.(session.SkillExtractor); ok {
+					if ev, err := ext.ExtractSkills(sess.ID); err == nil {
+						skills = ev
+					}
+				} else {
+					skills = []session.SkillEvent{{
+						SessionID:   sess.ID,
+						CLI:         matchedCLI,
+						Timestamp:   sess.StartedAt,
+						Unsupported: true,
+					}}
+				}
+			}
+
+			res := showResult{
 				ID:        sess.ID,
 				CLI:       matchedCLI,
 				Project:   sess.ProjectCwd,
@@ -126,7 +144,20 @@ func sessionShowCmd() *cobra.Command {
 				EndedAt:   ended,
 				TurnCount: sess.TurnCount,
 				Turns:     turns,
-			})
+				Skills:    skills,
+			}
+
+			if format != output.Table {
+				return output.Render(os.Stdout, output.Format(format), res)
+			}
+
+			if err := output.Render(os.Stdout, output.Format(format), res); err != nil {
+				return err
+			}
+			if showSkills {
+				return renderSkillsForShow(format, skills)
+			}
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&cliFlag, "tool", "", "Restrict search to a specific CLI")
@@ -136,5 +167,7 @@ func sessionShowCmd() *cobra.Command {
 		"Narrow prefix match to project dir")
 	cmd.Flags().StringVar(&since, "since", "",
 		"Narrow prefix match to sessions since (e.g. 7d, 2026-04-01)")
+	cmd.Flags().BoolVar(&showSkills, "skills", false,
+		"Embed skill invocations alongside the session detail")
 	return cmd
 }

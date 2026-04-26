@@ -178,6 +178,34 @@ func TestArgsSessionSearchRequiresOneArg(t *testing.T) {
 	}
 }
 
+func TestArgsSessionSkillsFlags(t *testing.T) {
+	cmd := sessionSkillsCmd()
+	stubRunE(cmd)
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+
+	for _, name := range []string{"session", "cli", "project", "name", "since", "until", "format"} {
+		if cmd.Flags().Lookup(name) == nil {
+			t.Errorf("missing flag %q", name)
+		}
+	}
+	if v, _ := cmd.Flags().GetString("format"); v != "table" {
+		t.Errorf("format default = %q, want table", v)
+	}
+
+	cmd.SetArgs([]string{"--help"})
+	if err := cmd.Execute(); err != nil {
+		t.Errorf("--help errored: %v", err)
+	}
+}
+
+func TestArgsSessionShowSkillsFlag(t *testing.T) {
+	cmd := sessionShowCmd()
+	if cmd.Flags().Lookup("skills") == nil {
+		t.Error("missing --skills flag on session show")
+	}
+}
+
 func TestArgsCommandWiring(t *testing.T) {
 	root := cli.New(cli.Config{Name: "usp", Version: "test"})
 	root.Cmd.AddCommand(
@@ -203,7 +231,7 @@ func TestArgsCommandWiring(t *testing.T) {
 			for _, sub := range c.Commands() {
 				sesNames[sub.Name()] = true
 			}
-			for _, want := range []string{"list", "show", "search", "lineage"} {
+			for _, want := range []string{"list", "show", "search", "lineage", "skills"} {
 				if !sesNames[want] {
 					t.Errorf("session missing subcommand %q", want)
 				}

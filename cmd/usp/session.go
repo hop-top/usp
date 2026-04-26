@@ -16,6 +16,7 @@ func sessionCmd(_ *cli.Root) *cobra.Command {
 		sessionShowCmd(),
 		sessionSearchCmd(),
 		sessionLineageCmd(),
+		sessionSkillsCmd(),
 	)
 	return cmd
 }

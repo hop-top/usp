@@ -1,0 +1,20 @@
+graph LR
+    User["User runs<br/>usp session skills"] --> Cmd["Cobra subcommand<br/>cmd/usp/session_skills.go"]
+    Cmd --> FilterAdapter["FilterAdapters(--cli)"]
+    FilterAdapter --> Resolve{"--session set?"}
+    Resolve -- yes --> ResolveOne["ResolveSessionID()"]
+    Resolve -- no --> ListAll["adapter.ListSessions(--project)"]
+    ResolveOne --> Targets[("targets [(session, adapter)]")]
+    ListAll --> Targets
+    Targets --> Loop["for each target"]
+    Loop --> SinceUntil["session.StartedAt window?"]
+    SinceUntil -- in window --> Cap{"adapter implements<br/>SkillExtractor?"}
+    SinceUntil -- out --> Skip(("skip"))
+    Cap -- yes --> Extract["adapter.ExtractSkills(id)"]
+    Cap -- no --> Unsupported[("unsupported:true row")]
+    Extract --> Events[("[]SkillEvent")]
+    Events --> EventFilter["per-event since/until"]
+    EventFilter --> NameFilter["--name substring"]
+    Unsupported --> Merge["merge + sort by ts asc"]
+    NameFilter --> Merge
+    Merge --> Render["kit/output Render<br/>(table | json | yaml)"]

@@ -126,11 +126,16 @@ usp doctor               # what's installed, what's readable
 usp setup                # index detected CLIs
 usp session list         # all sessions, all CLIs, sorted
 usp session show <id>    # full session detail
+usp session show <id> --skills  # detail + skill invocations
 usp session search auth  # find sessions mentioning "auth"
+usp session skills --name review  # every session that fired the review skill
 
 usp resume --tool codex        # resume last session in Codex
 usp session lineage <id>      # cross-CLI conversation history
 ```
+
+See [docs/architecture/session-introspection.md](docs/architecture/session-introspection.md)
+for the `session skills` data model + adapter contract.
 
 ### Flags
 

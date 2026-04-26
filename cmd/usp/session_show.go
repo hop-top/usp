@@ -54,14 +54,15 @@ func adapterOrder(id string) []string {
 // showResult is the unified payload for session show across all formats.
 // Table format renders the top-level metadata; JSON/YAML includes turns.
 type showResult struct {
-	ID        string     `table:"ID"       json:"id"`
-	NativeID  string     `table:"-"        json:"native_id,omitempty"`
-	CLI       string     `table:"CLI"      json:"cli"`
-	Project   string     `table:"PROJECT"  json:"project"`
-	StartedAt string     `table:"STARTED"  json:"started_at"`
-	EndedAt   string     `table:"ENDED"    json:"ended_at"`
-	TurnCount int        `table:"TURNS"    json:"turn_count"`
-	Turns     []showTurn `table:"-"        json:"turns"`
+	ID        string               `table:"ID"      json:"id"`
+	NativeID  string               `table:"-"       json:"native_id,omitempty"`
+	CLI       string               `table:"CLI"     json:"cli"`
+	Project   string               `table:"PROJECT" json:"project"`
+	StartedAt string               `table:"STARTED" json:"started_at"`
+	EndedAt   string               `table:"ENDED"   json:"ended_at"`
+	TurnCount int                  `table:"TURNS"   json:"turn_count"`
+	Turns     []showTurn           `table:"-"       json:"turns"`
+	Skills    []session.SkillEvent `table:"-"       json:"skills,omitempty"`
 }
 
 type showTurn struct {
@@ -73,9 +74,10 @@ type showTurn struct {
 
 func sessionShowCmd() *cobra.Command {
 	var (
-		cliFlag string
-		project string
-		since   string
+		cliFlag    string
+		project    string
+		since      string
+		showSkills bool
 	)
 
 	cmd := &cobra.Command{
@@ -127,7 +129,23 @@ func sessionShowCmd() *cobra.Command {
 				ended = sess.EndedAt.Format("2006-01-02 15:04:05")
 			}
 
-			return output.Render(os.Stdout, formatFromViper(), showResult{
+			var skills []session.SkillEvent
+			if showSkills {
+				if ext, ok := a.(session.SkillExtractor); ok {
+					if ev, err := ext.ExtractSkills(sess.NativeID); err == nil {
+						skills = ev
+					}
+				} else {
+					skills = []session.SkillEvent{{
+						SessionID:   sess.NativeID,
+						CLI:         matchedCLI,
+						Timestamp:   sess.StartedAt,
+						Unsupported: true,
+					}}
+				}
+			}
+
+			res := showResult{
 				ID:        sess.ID,
 				NativeID:  sess.NativeID,
 				CLI:       matchedCLI,
@@ -136,7 +154,17 @@ func sessionShowCmd() *cobra.Command {
 				EndedAt:   ended,
 				TurnCount: sess.TurnCount,
 				Turns:     turns,
-			})
+				Skills:    skills,
+			}
+
+			fmt := formatFromViper()
+			if err := output.Render(os.Stdout, fmt, res); err != nil {
+				return err
+			}
+			if showSkills && fmt == output.Table {
+				return renderSkillsForShow(fmt, skills)
+			}
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&cliFlag, "tool", "", "Restrict search to a specific CLI")
@@ -144,5 +172,7 @@ func sessionShowCmd() *cobra.Command {
 		"Narrow prefix match to project dir")
 	cmd.Flags().StringVar(&since, "since", "",
 		"Narrow prefix match to sessions since (e.g. 7d, 2026-04-01)")
+	cmd.Flags().BoolVar(&showSkills, "skills", false,
+		"Embed skill invocations alongside the session detail")
 	return cmd
 }

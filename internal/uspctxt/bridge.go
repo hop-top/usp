@@ -40,16 +40,22 @@ type SessionSource interface {
 // CtxtClient invokes the ctxt CLI to upsert a Projection.
 //
 // Default impl (NewExecClient) shells out to ctxt analyze with
-// --hints, --source-key, --wait and pipes the body via stdin.
-// Tests inject a fake.
+// --mentions (primary identity), optional --hints, --source-key
+// (secondary dedup), --wait, piping the body via stdin. Tests
+// inject a fake.
 type CtxtClient interface {
 	Upsert(ctx context.Context, p Projection) error
 }
 
 // RunOpts configures a single bridge run.
 type RunOpts struct {
-	// Agent is the producing aps profile id; tagged on every object.
+	// Agent is the producing aps profile id; emitted as @agent.<id>
+	// mention on every object.
 	Agent string
+
+	// Scope is the logical routing scope; emitted as @scope.<value>
+	// mention when non-empty.
+	Scope string
 
 	// Project opts forwarded to Project for each session.
 	Project ProjectOpts
@@ -81,6 +87,9 @@ func Run(ctx context.Context, src SessionSource, client CtxtClient, st *State, o
 	}
 	if opts.Project.Agent == "" {
 		opts.Project.Agent = opts.Agent
+	}
+	if opts.Project.Scope == "" {
+		opts.Project.Scope = opts.Scope
 	}
 
 	res := RunResult{
@@ -149,16 +158,22 @@ func NewExecClient(server string) CtxtClient {
 	return &execClient{bin: CtxtBin, server: server}
 }
 
-// Upsert pipes p.Body to `ctxt analyze --hints "<...>"
-// --source-key usp/<id> --wait`. ctxt's --source-key + idempotency
-// at the dpkms layer is what makes re-runs upsert rather than dupe.
+// Upsert pipes p.Body to `ctxt analyze --mentions "<...>"
+// [--hints "<...>"] --source-key usp/<id> --wait`. The
+// `@usp.session.<id>` mention is the primary identity anchor
+// (spec §4.4 / mentions-registry.md); `--source-key` is retained
+// as a secondary dedup hint for ctxt's external-id catalog.
+// `--hints` is omitted when empty (post-mentions, identity tags
+// no longer flow through hints).
 func (c *execClient) Upsert(ctx context.Context, p Projection) error {
 	args := []string{
 		"analyze",
-		"--hints", p.HintsString(),
-		"--source-key", p.SourceKey,
-		"--wait",
+		"--mentions", p.MentionsString(),
 	}
+	if hs := p.HintsString(); hs != "" {
+		args = append(args, "--hints", hs)
+	}
+	args = append(args, "--source-key", p.SourceKey, "--wait")
 	if c.server != "" {
 		args = append(args, "--server", c.server)
 	}

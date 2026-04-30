@@ -93,6 +93,30 @@ Project: ~/projects/myapp
 Total: 192 turns across 3 CLIs
 ```
 
+## Signals
+
+USP lifts four signal classes off raw transcripts into the
+normalized envelope, then surfaces them through `usp-ctxt` so
+ctxt indexes can search by file, intent, model, and cost.
+
+| Signal | Source | Emitted as | Consumer |
+|---|---|---|---|
+| File touched | tool calls (Read/Edit/Write/MultiEdit/NotebookEdit/Glob/Grep + codex `apply_patch` / `shell` cwd) | `@file.<slug>` mention (writes sort first; capped) | `ctxt find "@file.x"` |
+| Intent | `Turn.Subtype="slash-command"` rendered as `/<name>` | `## Intents` body section | session search; future agents view |
+| Model | claude / codex `turn_context` / gemini event header / opencode `modelID` | `@model.<slug>` mention | `ctxt find "@model.claude-opus-4-7"` |
+| Tokens | claude `message.usage` (input/output/cache_read/cache_write) | `Session.Metadata["usage.tokens.*"]` + `#tokens:small\|med\|large` hint | dashboards; cost reports |
+| Cost | claude pricing table × tokens | `Session.Metadata["usage.cost_usd"]` + `#cost:low\|med\|high` hint | `ctxt find "#cost:high"` |
+| Duration | `EndedAt - StartedAt` | `Session.Metadata["performance.duration_ms"]` | telemetry section |
+| CLI version | claude `version` / codex `meta.payload.cli_version` | `Session.Metadata["cli_version"]` | debugging adapter quirks |
+| Sub-agent | claude `isSidechain:true` + `parentToolUseID` | `Turn.Subtype="sidechain"`, ordered after parent Task tool_use | agents view (T-0071) |
+
+Adapters populate any subset the source provides; missing keys
+remain absent (no zero values written). See
+[`session/envelope.go`](session/envelope.go) for the full key
+namespace registry, and
+[`internal/uspctxt/projection.go`](internal/uspctxt/projection.go)
+for the mention/hint vocabulary emitted into ctxt.
+
 ## Quickstart
 
 ```sh

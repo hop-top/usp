@@ -10,6 +10,25 @@
 // emergent classifier signals (`#hash:` for content fingerprinting).
 // `--source-key` is kept as a secondary dedup hint per spec §4.4.
 //
+// Mention vocabulary (post T-0079 / T-0081):
+//   - @usp.session.<id>           anchor
+//   - @agent.<slug>               opts.Agent
+//   - @cli.<slug>                 sess.CLI
+//   - @project.<slug>             projectSlug(sess.ProjectCwd)
+//   - @usp.lineage.<id>           opts.LineageRoot when set
+//   - @scope.<slug>               opts.Scope when set
+//   - @file.<slug>                files touched per session.MentionExtractor;
+//                                 writes (Edit/Write/MultiEdit/NotebookEdit)
+//                                 sort first; capped at opts.MaxFileMentions
+//   - @model.<slug>               sess.Metadata["assistant.model"]
+//
+// Hint vocabulary (post T-0081):
+//   - #hash:<short>               content fingerprint (always)
+//   - #cost:low|med|high          from sess.Metadata["usage.cost_usd"]
+//                                 (<0.10 low, <1.0 med, >=1.0 high)
+//   - #tokens:small|med|large     from input+output tokens
+//                                 (<=10k small, <=100k med, >100k large)
+//
 // Two pure halves are kept here (projection + state) so the cmd
 // layer can wire them to os/exec + filesystem without bringing
 // either concern into the core. Tests live in projection_test.go

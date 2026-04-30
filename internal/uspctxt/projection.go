@@ -111,7 +111,7 @@ func Project(sess session.Session, turns []session.Turn, opts ProjectOpts) Proje
 	}
 	hash := sha256Hex(body)
 
-	hints := buildHints(hash)
+	hints := buildHints(sess, hash)
 	return Projection{
 		SourceKey:   "usp/" + sess.ID,
 		Mentions:    mentions,
@@ -132,9 +132,9 @@ func (p Projection) MentionsString() string {
 }
 
 // buildMentions emits the canonical identity refs in spec-prescribed
-// order: @usp.session, @agent, @cli, @project, @usp.lineage, @scope.
-// Slugs lowercased per mentions.md §Syntax. Anchor is @usp.session;
-// other namespaces are conditional on inputs being non-empty.
+// order: @usp.session, @agent, @cli, @project, @usp.lineage, @scope,
+// @model. Slugs lowercased per mentions.md §Syntax. Anchor is
+// @usp.session; other namespaces are conditional on inputs.
 func buildMentions(sess session.Session, opts ProjectOpts) []string {
 	out := []string{}
 	out = append(out, "@usp.session."+strings.ToLower(strings.TrimSpace(sess.ID)))
@@ -154,7 +154,24 @@ func buildMentions(sess session.Session, opts ProjectOpts) []string {
 	if scope := strings.ToLower(strings.TrimSpace(opts.Scope)); scope != "" {
 		out = append(out, "@scope."+scope)
 	}
+	if slug := modelSlug(metaString(sess.Metadata, "assistant.model")); slug != "" {
+		out = append(out, "@model."+slug)
+	}
 	return out
+}
+
+// modelSlug normalizes a model id into a `@model.<slug>` per mentions
+// registry: lowercased; `:`, `.`, `/` → `-`. Empty input => empty.
+func modelSlug(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ""
+	}
+	id = strings.ToLower(id)
+	id = strings.ReplaceAll(id, ":", "-")
+	id = strings.ReplaceAll(id, ".", "-")
+	id = strings.ReplaceAll(id, "/", "-")
+	return id
 }
 
 // projectSlug normalizes a cwd into a `@project.<slug>` per registry
@@ -170,10 +187,97 @@ func projectSlug(cwd string) string {
 	return base
 }
 
-// buildHints retains only the content-hash classifier; identity tags
-// have moved to mentions per spec §8.2.
-func buildHints(hash string) []string {
-	return []string{"#hash:" + hash[:16]}
+// buildHints emits classifier hints. #hash is always present;
+// telemetry-derived bands (#cost, #tokens) added when Metadata
+// supplies the source values. Identity tags moved to mentions
+// per spec §8.2.
+//
+// Cost bands (usage.cost_usd, USD): <0.10 low, <1.0 med, >=1.0 high.
+// Token buckets (input+output): <=10_000 small, <=100_000 med,
+// >100_000 large. "small/med/large" disambiguates from cost bands.
+func buildHints(sess session.Session, hash string) []string {
+	out := []string{"#hash:" + hash[:16]}
+	if cost, ok := metaFloat(sess.Metadata, "usage.cost_usd"); ok && cost > 0 {
+		out = append(out, "#cost:"+costBand(cost))
+	}
+	in, okIn := metaInt(sess.Metadata, "usage.tokens.input")
+	outTok, okOut := metaInt(sess.Metadata, "usage.tokens.output")
+	if okIn || okOut {
+		out = append(out, "#tokens:"+tokenBucket(in+outTok))
+	}
+	return out
+}
+
+func costBand(c float64) string {
+	switch {
+	case c < 0.10:
+		return "low"
+	case c < 1.0:
+		return "med"
+	default:
+		return "high"
+	}
+}
+
+func tokenBucket(n int) string {
+	switch {
+	case n <= 10_000:
+		return "small"
+	case n <= 100_000:
+		return "med"
+	default:
+		return "large"
+	}
+}
+
+// metaString reads a string-typed Metadata key. Missing or wrong-typed
+// keys return "".
+func metaString(m map[string]any, key string) string {
+	if m == nil {
+		return ""
+	}
+	v, ok := m[key].(string)
+	if !ok {
+		return ""
+	}
+	return v
+}
+
+// metaInt reads an int-typed Metadata key. Returns (0, false) when
+// missing or wrong-typed.
+func metaInt(m map[string]any, key string) (int, bool) {
+	if m == nil {
+		return 0, false
+	}
+	v, ok := m[key].(int)
+	if !ok {
+		return 0, false
+	}
+	return v, true
+}
+
+// metaInt64 reads an int64-typed Metadata key.
+func metaInt64(m map[string]any, key string) (int64, bool) {
+	if m == nil {
+		return 0, false
+	}
+	v, ok := m[key].(int64)
+	if !ok {
+		return 0, false
+	}
+	return v, true
+}
+
+// metaFloat reads a float64-typed Metadata key.
+func metaFloat(m map[string]any, key string) (float64, bool) {
+	if m == nil {
+		return 0, false
+	}
+	v, ok := m[key].(float64)
+	if !ok {
+		return 0, false
+	}
+	return v, true
 }
 
 func renderBody(sess session.Session, turns []session.Turn, opts ProjectOpts, mentions []string) string {
@@ -218,7 +322,52 @@ func renderBody(sess session.Session, turns []session.Turn, opts ProjectOpts, me
 	for _, c := range calls {
 		fmt.Fprintf(&b, "- %s: %s\n", c.Name, oneLine(c.Input))
 	}
+
+	if tel := renderTelemetry(sess); tel != "" {
+		b.WriteString("\n## Telemetry\n\n")
+		b.WriteString(tel)
+	}
 	return b.String()
+}
+
+// renderTelemetry emits a bullet list of telemetry signals from
+// Session.Metadata. Returns "" when no telemetry keys present so
+// the caller can omit the heading entirely.
+func renderTelemetry(sess session.Session) string {
+	model := metaString(sess.Metadata, "assistant.model")
+	in, okIn := metaInt(sess.Metadata, "usage.tokens.input")
+	outTok, okOut := metaInt(sess.Metadata, "usage.tokens.output")
+	dur, okDur := metaInt64(sess.Metadata, "performance.duration_ms")
+	cost, okCost := metaFloat(sess.Metadata, "usage.cost_usd")
+
+	if model == "" && !okIn && !okOut && !okDur && !okCost {
+		return ""
+	}
+	var b strings.Builder
+	if model != "" {
+		fmt.Fprintf(&b, "- model: %s\n", model)
+	}
+	if okIn || okOut {
+		fmt.Fprintf(&b, "- tokens: %d\n", in+outTok)
+	}
+	if okDur {
+		fmt.Fprintf(&b, "- duration: %s\n", formatDuration(dur))
+	}
+	if okCost {
+		fmt.Fprintf(&b, "- cost: %s\n", formatCost(cost))
+	}
+	return b.String()
+}
+
+func formatDuration(ms int64) string {
+	if ms >= 1000 {
+		return fmt.Sprintf("%.1fs", float64(ms)/1000.0)
+	}
+	return fmt.Sprintf("%dms", ms)
+}
+
+func formatCost(c float64) string {
+	return fmt.Sprintf("$%.2f", c)
 }
 
 func userPrompts(turns []session.Turn, max int) []string {

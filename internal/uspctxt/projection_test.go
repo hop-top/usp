@@ -283,3 +283,199 @@ func TestProject_OneLine_TrimsAndCollapses(t *testing.T) {
 		t.Errorf("collapsed line missing; body:\n%s", p.Body)
 	}
 }
+
+// --- T-0081: telemetry-derived signals --------------------------------------
+
+// TestProject_Hints_CostBand: boundary table for cost band thresholds.
+// <0.10 → low, <1.0 → med, ≥1.0 → high.
+func TestProject_Hints_CostBand(t *testing.T) {
+	cases := []struct {
+		cost float64
+		want string
+	}{
+		{0.099, "#cost:low"},
+		{0.10, "#cost:med"},
+		{0.999, "#cost:med"},
+		{1.0, "#cost:high"},
+		{5.0, "#cost:high"},
+	}
+	for _, tc := range cases {
+		sess := sampleSession()
+		sess.Metadata = map[string]any{"usage.cost_usd": tc.cost}
+		p := Project(sess, sampleTurns(), ProjectOpts{Agent: "sami"})
+		var got string
+		for _, h := range p.Hints {
+			if strings.HasPrefix(h, "#cost:") {
+				got = h
+			}
+		}
+		if got != tc.want {
+			t.Errorf("cost=%v: want %q, got %q (hints=%v)", tc.cost, tc.want, got, p.Hints)
+		}
+	}
+}
+
+// TestProject_Hints_TokenBucket: boundary table for token volume buckets.
+// ≤10_000 → small, ≤100_000 → med, >100_000 → large.
+func TestProject_Hints_TokenBucket(t *testing.T) {
+	cases := []struct {
+		in, out int
+		want    string
+	}{
+		{5_000, 5_000, "#tokens:small"},   // 10_000 boundary
+		{5_001, 5_000, "#tokens:med"},     // 10_001
+		{50_000, 50_000, "#tokens:med"},   // 100_000 boundary
+		{50_001, 50_000, "#tokens:large"}, // 100_001
+	}
+	for _, tc := range cases {
+		sess := sampleSession()
+		sess.Metadata = map[string]any{
+			"usage.tokens.input":  tc.in,
+			"usage.tokens.output": tc.out,
+		}
+		p := Project(sess, sampleTurns(), ProjectOpts{Agent: "sami"})
+		var got string
+		for _, h := range p.Hints {
+			if strings.HasPrefix(h, "#tokens:") {
+				got = h
+			}
+		}
+		if got != tc.want {
+			t.Errorf("tokens=%d+%d: want %q, got %q (hints=%v)",
+				tc.in, tc.out, tc.want, got, p.Hints)
+		}
+	}
+}
+
+// TestProject_Hints_NoTelemetry_NoBands: cost / tokens hints absent when
+// Metadata has neither key. Existing #hash hint preserved.
+func TestProject_Hints_NoTelemetry_NoBands(t *testing.T) {
+	p := Project(sampleSession(), sampleTurns(), ProjectOpts{Agent: "sami"})
+	if len(p.Hints) != 1 {
+		t.Fatalf("hints: want only #hash; got %v", p.Hints)
+	}
+	for _, h := range p.Hints {
+		if strings.HasPrefix(h, "#cost:") || strings.HasPrefix(h, "#tokens:") {
+			t.Errorf("unexpected telemetry hint: %q", h)
+		}
+	}
+}
+
+// TestProject_Hints_ZeroCost_Skipped: cost == 0 must not emit a band.
+func TestProject_Hints_ZeroCost_Skipped(t *testing.T) {
+	sess := sampleSession()
+	sess.Metadata = map[string]any{"usage.cost_usd": 0.0}
+	p := Project(sess, sampleTurns(), ProjectOpts{Agent: "sami"})
+	for _, h := range p.Hints {
+		if strings.HasPrefix(h, "#cost:") {
+			t.Errorf("zero cost must not emit band; got %q", h)
+		}
+	}
+}
+
+// TestProject_Telemetry_Section_Present: when telemetry keys present,
+// body has a Telemetry section listing model, tokens, duration, cost.
+func TestProject_Telemetry_Section_Present(t *testing.T) {
+	sess := sampleSession()
+	sess.Metadata = map[string]any{
+		"assistant.model":         "claude-opus-4-7",
+		"usage.tokens.input":      1_000,
+		"usage.tokens.output":     2_000,
+		"performance.duration_ms": int64(1_500),
+		"usage.cost_usd":          0.25,
+	}
+	p := Project(sess, sampleTurns(), ProjectOpts{Agent: "sami"})
+	if !strings.Contains(p.Body, "## Telemetry") {
+		t.Fatalf("body missing Telemetry section:\n%s", p.Body)
+	}
+	for _, want := range []string{
+		"model:",
+		"tokens:",
+		"$",
+		"claude-opus-4-7",
+		"3000",
+		"1.5s",
+		"$0.25",
+	} {
+		if !strings.Contains(p.Body, want) {
+			t.Errorf("Telemetry section missing %q; body:\n%s", want, p.Body)
+		}
+	}
+}
+
+// TestProject_Telemetry_Section_Absent: no telemetry keys → no heading.
+func TestProject_Telemetry_Section_Absent(t *testing.T) {
+	p := Project(sampleSession(), sampleTurns(), ProjectOpts{Agent: "sami"})
+	if strings.Contains(p.Body, "## Telemetry") {
+		t.Errorf("Telemetry section must be omitted when no keys; body:\n%s", p.Body)
+	}
+}
+
+// TestProject_Telemetry_DurationFormat: <1000ms → "<n>ms"; ≥1000ms → "<x.y>s".
+func TestProject_Telemetry_DurationFormat(t *testing.T) {
+	cases := []struct {
+		ms   int64
+		want string
+	}{
+		{123, "123ms"},
+		{999, "999ms"},
+		{1000, "1.0s"},
+		{1500, "1.5s"},
+		{12_345, "12.3s"},
+	}
+	for _, tc := range cases {
+		sess := sampleSession()
+		sess.Metadata = map[string]any{"performance.duration_ms": tc.ms}
+		p := Project(sess, sampleTurns(), ProjectOpts{Agent: "sami"})
+		if !strings.Contains(p.Body, "duration: "+tc.want) {
+			t.Errorf("duration=%dms: want %q; body:\n%s", tc.ms, tc.want, p.Body)
+		}
+	}
+}
+
+// TestProject_Mentions_ModelSlug: model id slug normalization.
+// Lowercased; `:`, `.`, `/` collapse to `-`.
+func TestProject_Mentions_ModelSlug(t *testing.T) {
+	cases := []struct {
+		model string
+		want  string
+	}{
+		{"claude-opus-4-7", "@model.claude-opus-4-7"},
+		{"gpt-5.3-codex", "@model.gpt-5-3-codex"},
+		{"claude-3.5-sonnet", "@model.claude-3-5-sonnet"},
+		{"openai:gpt-4o", "@model.openai-gpt-4o"},
+		{"anthropic/claude-opus", "@model.anthropic-claude-opus"},
+		{"Claude-Opus-4-7", "@model.claude-opus-4-7"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		sess := sampleSession()
+		if tc.model != "" {
+			sess.Metadata = map[string]any{"assistant.model": tc.model}
+		}
+		p := Project(sess, sampleTurns(), ProjectOpts{Agent: "sami"})
+		var got string
+		for _, m := range p.Mentions {
+			if strings.HasPrefix(m, "@model.") {
+				got = m
+			}
+		}
+		if got != tc.want {
+			t.Errorf("model=%q: want %q, got %q (mentions=%v)",
+				tc.model, tc.want, got, p.Mentions)
+		}
+	}
+}
+
+// TestProject_Mentions_ModelOrder: @model appended after identity mentions.
+func TestProject_Mentions_ModelOrder(t *testing.T) {
+	sess := sampleSession()
+	sess.Metadata = map[string]any{"assistant.model": "claude-opus-4-7"}
+	p := Project(sess, sampleTurns(), ProjectOpts{
+		Agent: "sami", Scope: "company",
+	})
+	last := p.Mentions[len(p.Mentions)-1]
+	if last != "@model.claude-opus-4-7" {
+		t.Errorf("@model must be last; got mentions=%v", p.Mentions)
+	}
+}

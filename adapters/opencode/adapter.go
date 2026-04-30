@@ -216,7 +216,39 @@ func (a *Adapter) GetSession(id string) (*session.Session, error) {
 		t := msToTime(updatedAt)
 		s.EndedAt = &t
 	}
+	if model := lastAssistantModel(db, id); model != "" {
+		s.Metadata["assistant.model"] = model
+	}
 	return s, nil
+}
+
+// lastAssistantModel queries assistant message rows for the most recent
+// non-empty modelID. Returns "" when none exist (e.g. user-only DBs or
+// schemas without modelID). Errors swallowed — telemetry is best-effort.
+func lastAssistantModel(db *sql.DB, sessionID string) string {
+	rows, err := db.Query(`
+		SELECT data FROM message
+		WHERE session_id = ?
+		ORDER BY created_at DESC`, sessionID,
+	)
+	if err != nil {
+		return ""
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var data string
+		if err := rows.Scan(&data); err != nil {
+			continue
+		}
+		var md messageData
+		if err := json.Unmarshal([]byte(data), &md); err != nil {
+			continue
+		}
+		if md.Role == "assistant" && md.ModelID != "" {
+			return md.ModelID
+		}
+	}
+	return ""
 }
 
 // StreamTurns returns a channel of turns for the given session.
@@ -285,9 +317,11 @@ func (a *Adapter) StreamTurns(id string) (<-chan session.Turn, error) {
 }
 
 // messageData is the JSON structure stored in message.data.
+// ModelID is observed on assistant rows in real OpenCode DBs.
 type messageData struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
+	ModelID string `json:"modelID,omitempty"`
 }
 
 // partDataJSON is the JSON structure stored in part.data.

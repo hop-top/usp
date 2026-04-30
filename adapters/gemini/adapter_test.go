@@ -308,6 +308,62 @@ func TestResumeAdapterInterface(t *testing.T) {
 	var _ session.ResumeAdapter = (*Adapter)(nil)
 }
 
+func TestGetSession_AssistantModelFromTranscript(t *testing.T) {
+	tmp := t.TempDir()
+	cwd := "/Users/me/proj"
+	writeProjectsJSON(t, tmp, map[string]string{cwd: "proj"})
+	mkHistoryDir(t, tmp, "proj", cwd)
+
+	histDir := filepath.Join(tmp, ".gemini", "history", "proj")
+	chat := map[string]any{
+		"model": "gemini-3-pro",
+		"history": []map[string]any{
+			{"role": "user", "content": "hi"},
+			{"role": "model", "content": "hello"},
+		},
+	}
+	data, _ := json.Marshal(chat)
+	if err := os.WriteFile(
+		filepath.Join(histDir, "with-model.json"), data, 0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	a := &Adapter{HomeDir: tmp}
+	s, err := a.GetSession("with-model")
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if got := s.Metadata["assistant.model"]; got != "gemini-3-pro" {
+		t.Errorf("assistant.model = %v, want gemini-3-pro", got)
+	}
+}
+
+func TestGetSession_AssistantModelAbsent(t *testing.T) {
+	tmp := t.TempDir()
+	cwd := "/Users/me/proj"
+	writeProjectsJSON(t, tmp, map[string]string{cwd: "proj"})
+	mkHistoryDir(t, tmp, "proj", cwd)
+
+	histDir := filepath.Join(tmp, ".gemini", "history", "proj")
+	if err := os.WriteFile(
+		filepath.Join(histDir, "no-model.json"),
+		[]byte(`{"history":[]}`), 0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	a := &Adapter{HomeDir: tmp}
+	s, err := a.GetSession("no-model")
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if _, ok := s.Metadata["assistant.model"]; ok {
+		t.Errorf("assistant.model should be absent, got %v",
+			s.Metadata["assistant.model"])
+	}
+}
+
 func TestResumeCmd(t *testing.T) {
 	a := &Adapter{}
 	got := a.ResumeCmd("my-tag")

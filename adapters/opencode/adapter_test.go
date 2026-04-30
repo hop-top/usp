@@ -404,6 +404,75 @@ func TestResumeAdapterInterface(t *testing.T) {
 	}
 }
 
+func TestGetSession_AssistantModelFromMessage(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "opencode.db")
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ddl := range []string{
+		`CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT,
+			title TEXT, directory TEXT, created_at INTEGER,
+			updated_at INTEGER)`,
+		`CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT,
+			data TEXT, created_at INTEGER)`,
+		`CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT,
+			session_id TEXT, data TEXT, created_at INTEGER)`,
+	} {
+		if _, err := db.Exec(ddl); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	a := New(WithDBPath(dbPath))
+	projectID := a.ProjectKey("/p")
+
+	if _, err := db.Exec(
+		`INSERT INTO session VALUES (?, ?, ?, ?, ?, ?)`,
+		"ses_model", projectID, "T", "/p", 1000, 2000,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO message VALUES (?, ?, ?, ?)`,
+		"m1", "ses_model", `{"role":"user","content":"hi"}`, 1000,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO message VALUES (?, ?, ?, ?)`,
+		"m2", "ses_model",
+		`{"role":"assistant","content":"hello","modelID":"glm-4.7"}`,
+		2000,
+	); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	s, err := a.GetSession("ses_model")
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if got := s.Metadata["assistant.model"]; got != "glm-4.7" {
+		t.Errorf("assistant.model = %v, want glm-4.7", got)
+	}
+}
+
+func TestGetSession_AssistantModelAbsent(t *testing.T) {
+	// Existing fixture has no modelID on message rows.
+	_, a := setupFixtureDB(t)
+	s, err := a.GetSession("ses_abc123")
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if _, ok := s.Metadata["assistant.model"]; ok {
+		t.Errorf("assistant.model should be absent, got %v",
+			s.Metadata["assistant.model"])
+	}
+}
+
 func TestInjectSession(t *testing.T) {
 	_, a := setupFixtureDB(t)
 

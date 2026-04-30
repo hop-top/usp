@@ -329,12 +329,23 @@ type jsonlEvent struct {
 	SessionID  string          `json:"sessionId"`
 	CWD        string          `json:"cwd"`
 	GitBranch  string          `json:"gitBranch"`
+	Version    string          `json:"version"` // Claude Code CLI version
 	Message    json.RawMessage `json:"message"`
 }
 
 type messagePayload struct {
 	Role    string          `json:"role"`
 	Content json.RawMessage `json:"content"`
+	Model   string          `json:"model"`
+	Usage   *usageBlock     `json:"usage,omitempty"`
+}
+
+// usageBlock mirrors message.usage on assistant turns.
+type usageBlock struct {
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
 }
 
 // parseSession reads a JSONL file and builds a Session envelope.
@@ -359,6 +370,10 @@ func (a *Adapter) parseSession(
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 	var lastTS time.Time
 
+	// Token accumulators (only commit to Metadata when non-zero seen).
+	var totIn, totOut, totCacheRead, totCacheWrite int
+	var lastModel, lastVersion string
+
 	for scanner.Scan() {
 		var ev jsonlEvent
 		if err := json.Unmarshal(scanner.Bytes(), &ev); err != nil {
@@ -380,12 +395,60 @@ func (a *Adapter) parseSession(
 		if ev.SessionID != "" {
 			s.Metadata["sessionId"] = ev.SessionID
 		}
+		if ev.Version != "" {
+			lastVersion = ev.Version
+		}
 		if ev.Type == "user" || ev.Type == "assistant" {
 			s.TurnCount++
+		}
+		// Pull usage + model from assistant message payload.
+		if ev.Type == "assistant" && len(ev.Message) > 0 {
+			var msg messagePayload
+			if err := json.Unmarshal(ev.Message, &msg); err == nil {
+				if msg.Model != "" {
+					lastModel = msg.Model
+				}
+				if msg.Usage != nil {
+					totIn += msg.Usage.InputTokens
+					totOut += msg.Usage.OutputTokens
+					totCacheRead += msg.Usage.CacheReadInputTokens
+					totCacheWrite += msg.Usage.CacheCreationInputTokens
+				}
+			}
 		}
 	}
 	if !lastTS.IsZero() {
 		s.EndedAt = &lastTS
+	}
+
+	if totIn > 0 {
+		s.Metadata["usage.tokens.input"] = totIn
+	}
+	if totOut > 0 {
+		s.Metadata["usage.tokens.output"] = totOut
+	}
+	if totCacheRead > 0 {
+		s.Metadata["usage.tokens.cache_read"] = totCacheRead
+	}
+	if totCacheWrite > 0 {
+		s.Metadata["usage.tokens.cache_write"] = totCacheWrite
+	}
+	if lastModel != "" {
+		s.Metadata["assistant.model"] = lastModel
+	}
+	if lastVersion != "" {
+		s.Metadata["cli_version"] = lastVersion
+	}
+	if !s.StartedAt.IsZero() && s.EndedAt != nil {
+		s.Metadata["performance.duration_ms"] =
+			s.EndedAt.Sub(s.StartedAt).Milliseconds()
+	}
+	if lastModel != "" {
+		if cost, ok := costUSD(
+			lastModel, totIn, totOut, totCacheRead, totCacheWrite,
+		); ok {
+			s.Metadata["usage.cost_usd"] = cost
+		}
 	}
 	return s, nil
 }
@@ -422,6 +485,14 @@ func eventToTurn(line []byte) (session.Turn, bool) {
 			turn.Content = extractContent(msg.Content)
 			if role == session.RoleAssistant {
 				turn.ToolCalls = extractToolCalls(msg.Content)
+				// Per-turn output tokens — only when present.
+				if msg.Usage != nil && msg.Usage.OutputTokens > 0 {
+					if turn.Metadata == nil {
+						turn.Metadata = map[string]any{}
+					}
+					turn.Metadata["usage.tokens.output"] =
+						msg.Usage.OutputTokens
+				}
 			}
 		}
 	}

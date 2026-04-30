@@ -180,7 +180,7 @@ func (a *Adapter) StreamTurns(id string) (<-chan session.Turn, error) {
 				if results := extractToolResultsFromLine(line); results != nil {
 					for useID, out := range results {
 						if idx, found := idIdx[useID]; found {
-							pending[idx[0]].ToolCalls[idx[1]].Output = out
+							pending[idx[0]].ToolCalls[idx[1]].Output = session.StripANSI(out)
 						}
 					}
 					// Flush any fully-resolved pending turns (in order).

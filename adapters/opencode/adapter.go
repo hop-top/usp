@@ -345,7 +345,7 @@ func appendPartData(turn *session.Turn, data string) {
 			tc.Input = string(pd.Input)
 		}
 		if pd.Output != "" {
-			tc.Output = pd.Output
+			tc.Output = session.StripANSI(pd.Output)
 		}
 		turn.ToolCalls = append(turn.ToolCalls, tc)
 	}

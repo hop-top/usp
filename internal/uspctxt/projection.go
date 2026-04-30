@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -86,6 +87,10 @@ type ProjectOpts struct {
 
 	// MaxBodyBytes truncates the rendered body. Zero => default 8192.
 	MaxBodyBytes int
+
+	// MaxFileMentions caps @file mentions emitted per session.
+	// Excess silently dropped. Zero => default 50.
+	MaxFileMentions int
 }
 
 // Project renders a Projection from a Session + its turns.
@@ -103,8 +108,11 @@ func Project(sess session.Session, turns []session.Turn, opts ProjectOpts) Proje
 	if opts.MaxBodyBytes <= 0 {
 		opts.MaxBodyBytes = 8192
 	}
+	if opts.MaxFileMentions <= 0 {
+		opts.MaxFileMentions = 50
+	}
 
-	mentions := buildMentions(sess, opts)
+	mentions := buildMentions(sess, turns, opts)
 	body := renderBody(sess, turns, opts, mentions)
 	if len(body) > opts.MaxBodyBytes {
 		body = body[:opts.MaxBodyBytes] + "\n\n_(body truncated)_\n"
@@ -135,7 +143,11 @@ func (p Projection) MentionsString() string {
 // order: @usp.session, @agent, @cli, @project, @usp.lineage, @scope.
 // Slugs lowercased per mentions.md §Syntax. Anchor is @usp.session;
 // other namespaces are conditional on inputs being non-empty.
-func buildMentions(sess session.Session, opts ProjectOpts) []string {
+//
+// Per-session @file mentions are appended after identity, capped at
+// opts.MaxFileMentions. Files touched by write tools (Edit, Write,
+// MultiEdit, NotebookEdit) sort before files only read/searched.
+func buildMentions(sess session.Session, turns []session.Turn, opts ProjectOpts) []string {
 	out := []string{}
 	out = append(out, "@usp.session."+strings.ToLower(strings.TrimSpace(sess.ID)))
 	if opts.Agent != "" {
@@ -153,6 +165,52 @@ func buildMentions(sess session.Session, opts ProjectOpts) []string {
 	}
 	if scope := strings.ToLower(strings.TrimSpace(opts.Scope)); scope != "" {
 		out = append(out, "@scope."+scope)
+	}
+	out = append(out, fileMentions(sess, turns, opts.MaxFileMentions)...)
+	return out
+}
+
+// writeTools is the set of tool names whose @file mentions get
+// priority placement (before read-only refs) per spec §file mentions.
+var writeTools = map[string]bool{
+	"Edit": true, "Write": true, "MultiEdit": true, "NotebookEdit": true,
+}
+
+// fileMentions runs the per-CLI extractor over each tool call,
+// buckets by write-vs-read, dedupes globally (first-seen wins), and
+// caps at max. Order: writes (first-seen) then reads (first-seen).
+func fileMentions(sess session.Session, turns []session.Turn, max int) []string {
+	if max <= 0 {
+		return nil
+	}
+	fn := session.GetMentionExtractor(sess.CLI)
+	if fn == nil {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	var writes, reads []string
+	for _, t := range turns {
+		for _, c := range t.ToolCalls {
+			ms := fn(c)
+			for _, m := range ms {
+				if m == "" {
+					continue
+				}
+				if _, ok := seen[m]; ok {
+					continue
+				}
+				seen[m] = struct{}{}
+				if writeTools[c.Name] {
+					writes = append(writes, m)
+				} else {
+					reads = append(reads, m)
+				}
+			}
+		}
+	}
+	out := append(writes, reads...)
+	if len(out) > max {
+		out = out[:max]
 	}
 	return out
 }
@@ -210,6 +268,13 @@ func renderBody(sess session.Session, turns []session.Turn, opts ProjectOpts, me
 		fmt.Fprintf(&b, "- %s\n", oneLine(p))
 	}
 
+	if intents := sessionIntents(turns); len(intents) > 0 {
+		b.WriteString("\n## Intents\n\n")
+		for _, n := range intents {
+			fmt.Fprintf(&b, "- /%s\n", n)
+		}
+	}
+
 	calls := flatToolCalls(turns, opts.MaxToolCalls)
 	b.WriteString("\n## Tool calls\n\n")
 	if len(calls) == 0 {
@@ -227,7 +292,17 @@ func userPrompts(turns []session.Turn, max int) []string {
 		if t.Role != session.RoleUser {
 			continue
 		}
-		s := strings.TrimSpace(t.Content)
+		if t.Subtype == "ide-notif" {
+			continue
+		}
+		var s string
+		if t.Subtype == "slash-command" {
+			if name := slashCommandName(t.Content); name != "" {
+				s = "/" + name
+			}
+		} else {
+			s = strings.TrimSpace(t.Content)
+		}
 		if s == "" {
 			continue
 		}
@@ -235,6 +310,49 @@ func userPrompts(turns []session.Turn, max int) []string {
 		if len(out) >= max {
 			break
 		}
+	}
+	return out
+}
+
+// slashCommandTagRE captures the inner name of <command-name>...</command-name>.
+var slashCommandTagRE = regexp.MustCompile(
+	`(?s)<command-name>(.*?)</command-name>`)
+
+// slashCommandName extracts a slash-command name from turn content.
+// Prefers <command-name>NAME</command-name>; falls back to the first
+// whitespace-bounded token starting with `/`. Leading `/` stripped.
+func slashCommandName(content string) string {
+	if m := slashCommandTagRE.FindStringSubmatch(content); len(m) == 2 {
+		name := strings.TrimSpace(m[1])
+		name = strings.TrimPrefix(name, "/")
+		return name
+	}
+	for _, tok := range strings.Fields(content) {
+		if strings.HasPrefix(tok, "/") {
+			return strings.TrimPrefix(tok, "/")
+		}
+	}
+	return ""
+}
+
+// sessionIntents returns distinct slash-command names invoked across
+// turns, ordered by first occurrence.
+func sessionIntents(turns []session.Turn) []string {
+	seen := map[string]struct{}{}
+	var out []string
+	for _, t := range turns {
+		if t.Role != session.RoleUser || t.Subtype != "slash-command" {
+			continue
+		}
+		name := slashCommandName(t.Content)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
 	}
 	return out
 }

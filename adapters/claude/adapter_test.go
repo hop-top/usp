@@ -719,3 +719,226 @@ func TestResumeCmd(t *testing.T) {
 		}
 	}
 }
+
+func TestStreamTurns_SidechainResolved(t *testing.T) {
+	home := t.TempDir()
+	projDir := filepath.Join(home, ".claude", "projects", "-foo-bar")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	const taskID = "toolu_xyz"
+	events := []map[string]any{
+		// main user turn
+		{
+			"uuid": "m1", "type": "user",
+			"timestamp": "2026-04-10T10:00:00.000Z",
+			"cwd":       "/foo/bar", "sessionId": "sess-sc",
+			"message": map[string]any{
+				"role":    "user",
+				"content": "dispatch a sub-agent",
+			},
+		},
+		// main assistant w/ Task tool_use
+		{
+			"uuid": "m2", "type": "assistant",
+			"timestamp": "2026-04-10T10:00:01.000Z",
+			"sessionId": "sess-sc",
+			"message": map[string]any{
+				"role": "assistant",
+				"content": []map[string]any{
+					{"type": "text", "text": "Dispatching..."},
+					{"type": "tool_use", "id": taskID, "name": "Task",
+						"input": map[string]any{"prompt": "do work"}},
+				},
+			},
+		},
+		// 3 sidechain turns (parentToolUseID matches)
+		{
+			"uuid": "sc1", "type": "user",
+			"timestamp":       "2026-04-10T10:00:02.000Z",
+			"sessionId":       "sess-sc",
+			"isSidechain":     true,
+			"parentToolUseID": taskID,
+			"message": map[string]any{
+				"role": "user", "content": "sub task prompt",
+			},
+		},
+		{
+			"uuid": "sc2", "type": "assistant",
+			"timestamp":       "2026-04-10T10:00:03.000Z",
+			"sessionId":       "sess-sc",
+			"isSidechain":     true,
+			"parentToolUseID": taskID,
+			"message": map[string]any{
+				"role":    "assistant",
+				"content": []map[string]any{{"type": "text", "text": "sub working"}},
+			},
+		},
+		{
+			"uuid": "sc3", "type": "assistant",
+			"timestamp":       "2026-04-10T10:00:04.000Z",
+			"sessionId":       "sess-sc",
+			"isSidechain":     true,
+			"parentToolUseID": taskID,
+			"message": map[string]any{
+				"role":    "assistant",
+				"content": []map[string]any{{"type": "text", "text": "sub done"}},
+			},
+		},
+		// main user resume
+		{
+			"uuid": "m3", "type": "user",
+			"timestamp": "2026-04-10T10:00:05.000Z",
+			"sessionId": "sess-sc",
+			"message": map[string]any{
+				"role":    "user",
+				"content": "what did it find?",
+			},
+		},
+		// main assistant final
+		{
+			"uuid": "m4", "type": "assistant",
+			"timestamp": "2026-04-10T10:00:06.000Z",
+			"sessionId": "sess-sc",
+			"message": map[string]any{
+				"role":    "assistant",
+				"content": []map[string]any{{"type": "text", "text": "summary"}},
+			},
+		},
+	}
+
+	writeFixtureJSONL(t, projDir, "sess-sc.jsonl", events)
+	a := New(WithHomeDir(home))
+
+	ch, err := a.StreamTurns("sess-sc")
+	if err != nil {
+		t.Fatalf("StreamTurns: %v", err)
+	}
+	var turns []session.Turn
+	for tn := range ch {
+		turns = append(turns, tn)
+	}
+
+	// Order: main-user, main-assistant(Task), sc1, sc2, sc3,
+	// main-user-resume, main-assistant-final = 7.
+	if len(turns) != 7 {
+		t.Fatalf("got %d turns, want 7\nturns: %+v", len(turns), turns)
+	}
+
+	want := []struct {
+		role            session.Role
+		subtype         string
+		contentContains string
+	}{
+		{session.RoleUser, "", "dispatch"},
+		{session.RoleAssistant, "", "Dispatching"},
+		{session.RoleUser, "sidechain", "sub task prompt"},
+		{session.RoleAssistant, "sidechain", "sub working"},
+		{session.RoleAssistant, "sidechain", "sub done"},
+		{session.RoleUser, "", "what did it find"},
+		{session.RoleAssistant, "", "summary"},
+	}
+	for i, w := range want {
+		got := turns[i]
+		if got.Role != w.role {
+			t.Errorf("turn[%d].Role = %q, want %q", i, got.Role, w.role)
+		}
+		if got.Subtype != w.subtype {
+			t.Errorf("turn[%d].Subtype = %q, want %q", i, got.Subtype, w.subtype)
+		}
+		if w.contentContains != "" && !contains(got.Content, w.contentContains) {
+			t.Errorf("turn[%d].Content %q lacks %q", i, got.Content, w.contentContains)
+		}
+	}
+
+	// Sidechain turns carry parent_tool_use_id.
+	for _, i := range []int{2, 3, 4} {
+		got, _ := turns[i].Metadata[sidechainMetaKey].(string)
+		if got != taskID {
+			t.Errorf("turn[%d].Metadata[%q] = %q, want %q",
+				i, sidechainMetaKey, got, taskID)
+		}
+	}
+
+	// TurnCount counts every type=user|assistant event once. Fixture
+	// has 7 such events; sidechain entries must not double-count.
+	s, err := a.GetSession("sess-sc")
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if s.TurnCount != 7 {
+		t.Errorf("TurnCount = %d, want 7", s.TurnCount)
+	}
+}
+
+func TestStreamTurns_SidechainOrphanPreserved(t *testing.T) {
+	home := t.TempDir()
+	projDir := filepath.Join(home, ".claude", "projects", "-foo-bar")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	events := []map[string]any{
+		{
+			"uuid": "u1", "type": "user",
+			"timestamp": "2026-04-10T10:00:00.000Z",
+			"cwd":       "/foo/bar", "sessionId": "sess-orphan",
+			"message": map[string]any{"role": "user", "content": "hi"},
+		},
+		// orphan sidechain — parent tool id never appears as a Task call
+		{
+			"uuid": "sc1", "type": "assistant",
+			"timestamp":       "2026-04-10T10:00:01.000Z",
+			"sessionId":       "sess-orphan",
+			"isSidechain":     true,
+			"parentToolUseID": "toolu_orphan",
+			"message": map[string]any{
+				"role":    "assistant",
+				"content": []map[string]any{{"type": "text", "text": "orphan body"}},
+			},
+		},
+		{
+			"uuid": "u2", "type": "user",
+			"timestamp": "2026-04-10T10:00:02.000Z",
+			"sessionId": "sess-orphan",
+			"message":   map[string]any{"role": "user", "content": "bye"},
+		},
+	}
+
+	writeFixtureJSONL(t, projDir, "sess-orphan.jsonl", events)
+	a := New(WithHomeDir(home))
+
+	ch, err := a.StreamTurns("sess-orphan")
+	if err != nil {
+		t.Fatalf("StreamTurns: %v", err)
+	}
+	var turns []session.Turn
+	for tn := range ch {
+		turns = append(turns, tn)
+	}
+
+	if len(turns) != 3 {
+		t.Fatalf("got %d turns, want 3", len(turns))
+	}
+	if turns[1].Subtype != "sidechain" {
+		t.Errorf("turn[1].Subtype = %q, want sidechain", turns[1].Subtype)
+	}
+	if got, _ := turns[1].Metadata[sidechainMetaKey].(string); got != "toolu_orphan" {
+		t.Errorf("orphan parent_tool_use_id = %q, want toolu_orphan", got)
+	}
+}
+
+// contains is a small substring helper to avoid importing strings into
+// every test for assertions; mirrors strings.Contains.
+func contains(s, sub string) bool {
+	if sub == "" {
+		return true
+	}
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}

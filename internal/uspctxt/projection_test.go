@@ -7,6 +7,9 @@ import (
 
 	"hop.top/kit/uxp"
 	"hop.top/usp/session"
+
+	// Register the claude mention extractor for fixtures using CLIClaude.
+	_ "hop.top/usp/adapters/claude"
 )
 
 func sampleSession() session.Session {
@@ -283,3 +286,277 @@ func TestProject_OneLine_TrimsAndCollapses(t *testing.T) {
 		t.Errorf("collapsed line missing; body:\n%s", p.Body)
 	}
 }
+
+// turnsWithToolCalls returns turns referencing files via Edit/Read/Write/Grep.
+func turnsWithToolCalls() []session.Turn {
+	return []session.Turn{
+		{Role: session.RoleUser, Content: "fix authn"},
+		{Role: session.RoleAssistant, ToolCalls: []session.ToolCall{
+			{Name: "Read", Input: `{"file_path":"a.go"}`},
+			{Name: "Edit", Input: `{"file_path":"b.go","old_string":"x","new_string":"y"}`},
+		}},
+		{Role: session.RoleAssistant, ToolCalls: []session.ToolCall{
+			{Name: "Write", Input: `{"file_path":"c.go","content":"z"}`},
+			// duplicate read of a.go — must dedupe.
+			{Name: "Read", Input: `{"file_path":"a.go"}`},
+		}},
+	}
+}
+
+// TestProject_FileMentions_AppearedAfterIdentity: @file mentions are
+// appended after identity mentions in the canonical order; identity
+// mentions remain first and unchanged.
+func TestProject_FileMentions_AppearedAfterIdentity(t *testing.T) {
+	p := Project(sampleSession(), turnsWithToolCalls(), ProjectOpts{Agent: "sami"})
+	want := []string{
+		"@usp.session.fe2eb947-ecab-4293-a26c-3485062e8e6a",
+		"@agent.sami",
+		"@cli.claude",
+		"@project.usp",
+	}
+	for i, w := range want {
+		if p.Mentions[i] != w {
+			t.Fatalf("identity mentions[%d]: want %q, got %q (all=%v)",
+				i, w, p.Mentions[i], p.Mentions)
+		}
+	}
+	tail := p.Mentions[len(want):]
+	for _, m := range tail {
+		if !strings.HasPrefix(m, "@file.") {
+			t.Errorf("trailing mention not @file.*: %q (all=%v)", m, p.Mentions)
+		}
+	}
+	for _, want := range []string{"@file.a-go", "@file.b-go", "@file.c-go"} {
+		var found bool
+		for _, m := range tail {
+			if m == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("missing %q in file mentions; got %v", want, tail)
+		}
+	}
+}
+
+// TestProject_FileMentions_Dedup: same file referenced twice yields one
+// mention.
+func TestProject_FileMentions_Dedup(t *testing.T) {
+	turns := []session.Turn{
+		{Role: session.RoleAssistant, ToolCalls: []session.ToolCall{
+			{Name: "Read", Input: `{"file_path":"dup.go"}`},
+			{Name: "Read", Input: `{"file_path":"dup.go"}`},
+			{Name: "Read", Input: `{"file_path":"dup.go"}`},
+		}},
+	}
+	p := Project(sampleSession(), turns, ProjectOpts{Agent: "sami"})
+	count := 0
+	for _, m := range p.Mentions {
+		if m == "@file.dup-go" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("dup file: want 1, got %d (mentions=%v)", count, p.Mentions)
+	}
+}
+
+// TestProject_FileMentions_WritePriority: with cap=3, the single Edit
+// must beat the larger pool of Reads.
+func TestProject_FileMentions_WritePriority(t *testing.T) {
+	turns := []session.Turn{
+		{Role: session.RoleAssistant, ToolCalls: []session.ToolCall{
+			{Name: "Read", Input: `{"file_path":"b.go"}`},
+			{Name: "Read", Input: `{"file_path":"c.go"}`},
+			{Name: "Read", Input: `{"file_path":"d.go"}`},
+			{Name: "Read", Input: `{"file_path":"e.go"}`},
+			{Name: "Read", Input: `{"file_path":"f.go"}`},
+			{Name: "Edit", Input: `{"file_path":"a.go"}`},
+		}},
+	}
+	p := Project(sampleSession(), turns, ProjectOpts{
+		Agent: "sami", MaxFileMentions: 3,
+	})
+	var files []string
+	for _, m := range p.Mentions {
+		if strings.HasPrefix(m, "@file.") {
+			files = append(files, m)
+		}
+	}
+	if len(files) != 3 {
+		t.Fatalf("cap=3 mismatch: got %d (%v)", len(files), files)
+	}
+	if files[0] != "@file.a-go" {
+		t.Errorf("first @file: want @file.a-go (Edit wins), got %q (%v)",
+			files[0], files)
+	}
+}
+
+// TestProject_FileMentions_Cap: MaxFileMentions truncates excess.
+func TestProject_FileMentions_Cap(t *testing.T) {
+	var calls []session.ToolCall
+	for i := 0; i < 10; i++ {
+		calls = append(calls, session.ToolCall{
+			Name:  "Read",
+			Input: `{"file_path":"f` + string(rune('0'+i)) + `.go"}`,
+		})
+	}
+	turns := []session.Turn{{Role: session.RoleAssistant, ToolCalls: calls}}
+	p := Project(sampleSession(), turns, ProjectOpts{MaxFileMentions: 3})
+	var files []string
+	for _, m := range p.Mentions {
+		if strings.HasPrefix(m, "@file.") {
+			files = append(files, m)
+		}
+	}
+	if len(files) != 3 {
+		t.Errorf("cap=3: got %d files (%v)", len(files), files)
+	}
+}
+
+// TestProject_FileMentions_DefaultCap: zero MaxFileMentions => default 50.
+func TestProject_FileMentions_DefaultCap(t *testing.T) {
+	var calls []session.ToolCall
+	for i := 0; i < 60; i++ {
+		calls = append(calls, session.ToolCall{
+			Name: "Read",
+			// Use distinct paths via index.
+			Input: `{"file_path":"dir/f` + itoa(i) + `.go"}`,
+		})
+	}
+	turns := []session.Turn{{Role: session.RoleAssistant, ToolCalls: calls}}
+	p := Project(sampleSession(), turns, ProjectOpts{}) // MaxFileMentions=0
+	var files []string
+	for _, m := range p.Mentions {
+		if strings.HasPrefix(m, "@file.") {
+			files = append(files, m)
+		}
+	}
+	if len(files) != 50 {
+		t.Errorf("default cap: want 50, got %d", len(files))
+	}
+}
+
+func itoa(i int) string {
+	if i == 0 {
+		return "0"
+	}
+	var buf []byte
+	for i > 0 {
+		buf = append([]byte{byte('0' + i%10)}, buf...)
+		i /= 10
+	}
+	return string(buf)
+}
+
+// TestProject_SlashCommand_RendersAsName: slash-command turn renders
+// /<name> in the Summary instead of the raw <command-name> tag.
+func TestProject_SlashCommand_RendersAsName(t *testing.T) {
+	turns := []session.Turn{
+		{Role: session.RoleUser, Content: "regular question"},
+		{Role: session.RoleUser, Subtype: "slash-command",
+			Content: "<command-name>plan</command-name><command-message>foo</command-message>"},
+	}
+	p := Project(sampleSession(), turns, ProjectOpts{Agent: "sami"})
+	if !strings.Contains(p.Body, "- /plan\n") {
+		t.Errorf("body missing '- /plan'; body:\n%s", p.Body)
+	}
+	if strings.Contains(p.Body, "<command-name>") {
+		t.Errorf("body should not contain raw <command-name> tag; body:\n%s", p.Body)
+	}
+}
+
+// TestProject_SlashCommand_FallbackTokenForm: when no <command-name> tag,
+// fall back to first whitespace-bounded token starting with `/`.
+func TestProject_SlashCommand_FallbackTokenForm(t *testing.T) {
+	turns := []session.Turn{
+		{Role: session.RoleUser, Subtype: "slash-command",
+			Content: "/review the diff"},
+	}
+	p := Project(sampleSession(), turns, ProjectOpts{Agent: "sami"})
+	if !strings.Contains(p.Body, "- /review\n") {
+		t.Errorf("body missing '- /review'; body:\n%s", p.Body)
+	}
+}
+
+// TestProject_IntentsSection: distinct slash commands listed in
+// first-occurrence order, deduped.
+func TestProject_IntentsSection(t *testing.T) {
+	turns := []session.Turn{
+		{Role: session.RoleUser, Subtype: "slash-command",
+			Content: "<command-name>plan</command-name>"},
+		{Role: session.RoleUser, Content: "regular"},
+		{Role: session.RoleUser, Subtype: "slash-command",
+			Content: "<command-name>review</command-name>"},
+		{Role: session.RoleUser, Subtype: "slash-command",
+			Content: "<command-name>plan</command-name>"},
+	}
+	p := Project(sampleSession(), turns, ProjectOpts{Agent: "sami"})
+	if !strings.Contains(p.Body, "## Intents") {
+		t.Fatalf("expected ## Intents section; body:\n%s", p.Body)
+	}
+	idxPlan := strings.Index(p.Body, "- /plan\n")
+	idxReview := strings.Index(p.Body, "- /review\n")
+	if idxPlan < 0 || idxReview < 0 {
+		t.Fatalf("missing /plan or /review in Intents; body:\n%s", p.Body)
+	}
+	intents := p.Body[strings.Index(p.Body, "## Intents"):]
+	if strings.Count(intents, "- /plan\n") != 1 {
+		t.Errorf("plan dedup failed: %q", intents)
+	}
+	// /plan first occurrence precedes /review.
+	if strings.Index(intents, "- /plan\n") > strings.Index(intents, "- /review\n") {
+		t.Errorf("intents not in first-occurrence order; section:\n%s", intents)
+	}
+}
+
+// TestProject_IntentsSection_OmittedWhenNone: no slash-command turns =>
+// no Intents section.
+func TestProject_IntentsSection_OmittedWhenNone(t *testing.T) {
+	p := Project(sampleSession(), sampleTurns(), ProjectOpts{Agent: "sami"})
+	if strings.Contains(p.Body, "## Intents") {
+		t.Errorf("Intents section should be absent; body:\n%s", p.Body)
+	}
+}
+
+// TestProject_IDENotif_Skipped: ide-notif user turns excluded from Summary.
+func TestProject_IDENotif_Skipped(t *testing.T) {
+	turns := []session.Turn{
+		{Role: session.RoleUser, Subtype: "ide-notif",
+			Content: "diagnostics changed"},
+		{Role: session.RoleUser, Content: "real question"},
+	}
+	p := Project(sampleSession(), turns, ProjectOpts{Agent: "sami"})
+	if strings.Contains(p.Body, "diagnostics changed") {
+		t.Errorf("ide-notif content leaked into body; body:\n%s", p.Body)
+	}
+	if !strings.Contains(p.Body, "- real question\n") {
+		t.Errorf("regular prompt missing; body:\n%s", p.Body)
+	}
+}
+
+// TestProject_IdentityMentionsOrder_NoRegression: identity mentions
+// remain in canonical order even when @file mentions are appended.
+func TestProject_IdentityMentionsOrder_NoRegression(t *testing.T) {
+	p := Project(sampleSession(), turnsWithToolCalls(), ProjectOpts{
+		Agent:       "sami",
+		LineageRoot: "11111111-1111-7111-8111-111111111111",
+		Scope:       "company",
+	})
+	want := []string{
+		"@usp.session.fe2eb947-ecab-4293-a26c-3485062e8e6a",
+		"@agent.sami",
+		"@cli.claude",
+		"@project.usp",
+		"@usp.lineage.11111111-1111-7111-8111-111111111111",
+		"@scope.company",
+	}
+	for i, w := range want {
+		if p.Mentions[i] != w {
+			t.Errorf("identity[%d]: want %q, got %q (all=%v)",
+				i, w, p.Mentions[i], p.Mentions)
+		}
+	}
+}
+

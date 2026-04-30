@@ -878,7 +878,6 @@ func TestStreamTurns_SidechainOrphanPreserved(t *testing.T) {
 	if err := os.MkdirAll(projDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-
 	events := []map[string]any{
 		{
 			"uuid": "u1", "type": "user",
@@ -927,6 +926,232 @@ func TestStreamTurns_SidechainOrphanPreserved(t *testing.T) {
 	if got, _ := turns[1].Metadata[sidechainMetaKey].(string); got != "toolu_orphan" {
 		t.Errorf("orphan parent_tool_use_id = %q, want toolu_orphan", got)
 	}
+}
+
+// usageEvents builds a JSONL fixture exercising message.usage on
+// assistant turns. Two assistant events to verify accumulation.
+func usageEvents(model string) []map[string]any {
+	return []map[string]any{
+		{
+			"uuid": "u1", "type": "user",
+			"timestamp": "2026-04-10T10:00:00.000Z",
+			"cwd":       "/foo/bar",
+			"sessionId": "sess-usage", "version": "2.1.112",
+			"message": map[string]any{
+				"role": "user", "content": "hi",
+			},
+		},
+		{
+			"uuid": "a1", "type": "assistant",
+			"timestamp": "2026-04-10T10:00:05.000Z",
+			"sessionId": "sess-usage", "version": "2.1.112",
+			"message": map[string]any{
+				"role": "assistant", "model": model,
+				"content": []map[string]any{
+					{"type": "text", "text": "first"},
+				},
+				"usage": map[string]any{
+					"input_tokens":                10,
+					"output_tokens":               40,
+					"cache_read_input_tokens":     100,
+					"cache_creation_input_tokens": 200,
+				},
+			},
+		},
+		{
+			"uuid": "a2", "type": "assistant",
+			"timestamp": "2026-04-10T10:00:10.000Z",
+			"sessionId": "sess-usage", "version": "2.1.112",
+			"message": map[string]any{
+				"role": "assistant", "model": model,
+				"content": []map[string]any{
+					{"type": "text", "text": "second"},
+				},
+				"usage": map[string]any{
+					"input_tokens":                5,
+					"output_tokens":               20,
+					"cache_read_input_tokens":     50,
+					"cache_creation_input_tokens": 0,
+				},
+			},
+		},
+	}
+}
+
+func TestParseSession_UsageTelemetry(t *testing.T) {
+	home := t.TempDir()
+	projDir := filepath.Join(home, ".claude", "projects", "-foo-bar")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFixtureJSONL(t, projDir, "sess-usage.jsonl",
+		usageEvents("claude-opus-4-7"))
+
+	a := New(WithHomeDir(home))
+	s, err := a.GetSession("sess-usage")
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+
+	if got := s.Metadata["usage.tokens.input"]; got != 15 {
+		t.Errorf("usage.tokens.input = %v, want 15", got)
+	}
+	if got := s.Metadata["usage.tokens.output"]; got != 60 {
+		t.Errorf("usage.tokens.output = %v, want 60", got)
+	}
+	if got := s.Metadata["usage.tokens.cache_read"]; got != 150 {
+		t.Errorf("usage.tokens.cache_read = %v, want 150", got)
+	}
+	if got := s.Metadata["usage.tokens.cache_write"]; got != 200 {
+		t.Errorf("usage.tokens.cache_write = %v, want 200", got)
+	}
+	if got := s.Metadata["assistant.model"]; got != "claude-opus-4-7" {
+		t.Errorf("assistant.model = %v, want claude-opus-4-7", got)
+	}
+	if got := s.Metadata["cli_version"]; got != "2.1.112" {
+		t.Errorf("cli_version = %v, want 2.1.112", got)
+	}
+	cost, ok := s.Metadata["usage.cost_usd"].(float64)
+	if !ok {
+		t.Fatalf("usage.cost_usd missing or wrong type: %T",
+			s.Metadata["usage.cost_usd"])
+	}
+	// in=15*15/M out=60*75/M creads=150*15*0.1/M cwrites=200*15*1.25/M
+	wantCost := (15.0*15 + 60.0*75 + 150.0*15*0.1 + 200.0*15*1.25) /
+		1_000_000
+	if abs(cost-wantCost) > 1e-9 {
+		t.Errorf("usage.cost_usd = %v, want %v", cost, wantCost)
+	}
+	if _, ok := s.Metadata["performance.duration_ms"].(int64); !ok {
+		t.Errorf("performance.duration_ms missing or wrong type: %T",
+			s.Metadata["performance.duration_ms"])
+	}
+}
+
+func TestParseSession_UsageTelemetry_UnknownModel(t *testing.T) {
+	home := t.TempDir()
+	projDir := filepath.Join(home, ".claude", "projects", "-foo-bar")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFixtureJSONL(t, projDir, "sess-unknown.jsonl",
+		usageEvents("claude-mystery-9-9"))
+
+	a := New(WithHomeDir(home))
+	s, err := a.GetSession("sess-unknown")
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if _, ok := s.Metadata["usage.cost_usd"]; ok {
+		t.Errorf("usage.cost_usd should be absent for unknown model, got %v",
+			s.Metadata["usage.cost_usd"])
+	}
+	if got := s.Metadata["assistant.model"]; got != "claude-mystery-9-9" {
+		t.Errorf("assistant.model = %v, want claude-mystery-9-9", got)
+	}
+}
+
+func TestParseSession_NoUsageBlockDoesNotPanic(t *testing.T) {
+	home := t.TempDir()
+	projDir := filepath.Join(home, ".claude", "projects", "-foo-bar")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Minimal session: user + assistant turn, no usage block.
+	events := []map[string]any{
+		{
+			"uuid": "u1", "type": "user",
+			"timestamp": "2026-04-10T10:00:00.000Z",
+			"cwd":       "/foo/bar", "sessionId": "sess-nousage",
+			"message": map[string]any{
+				"role": "user", "content": "hi",
+			},
+		},
+		{
+			"uuid": "a1", "type": "assistant",
+			"timestamp": "2026-04-10T10:00:05.000Z",
+			"sessionId": "sess-nousage",
+			"message": map[string]any{
+				"role": "assistant",
+				"content": []map[string]any{
+					{"type": "text", "text": "ok"},
+				},
+			},
+		},
+	}
+	writeFixtureJSONL(t, projDir, "sess-nousage.jsonl", events)
+
+	a := New(WithHomeDir(home))
+	s, err := a.GetSession("sess-nousage")
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	for _, k := range []string{
+		"usage.tokens.input", "usage.tokens.output",
+		"usage.tokens.cache_read", "usage.tokens.cache_write",
+		"usage.cost_usd", "assistant.model",
+	} {
+		if _, ok := s.Metadata[k]; ok {
+			t.Errorf("metadata[%q] = %v, want absent", k, s.Metadata[k])
+		}
+	}
+}
+
+func TestStreamTurns_PerTurnOutputTokens(t *testing.T) {
+	home := t.TempDir()
+	projDir := filepath.Join(home, ".claude", "projects", "-foo-bar")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFixtureJSONL(t, projDir, "sess-usage.jsonl",
+		usageEvents("claude-opus-4-7"))
+
+	a := New(WithHomeDir(home))
+	ch, err := a.StreamTurns("sess-usage")
+	if err != nil {
+		t.Fatalf("StreamTurns: %v", err)
+	}
+	var turns []session.Turn
+	for turn := range ch {
+		turns = append(turns, turn)
+	}
+	// 1 user + 2 assistant.
+	if len(turns) != 3 {
+		t.Fatalf("got %d turns, want 3", len(turns))
+	}
+	if got := turns[1].Metadata["usage.tokens.output"]; got != 40 {
+		t.Errorf("turns[1] output tokens = %v, want 40", got)
+	}
+	if got := turns[2].Metadata["usage.tokens.output"]; got != 20 {
+		t.Errorf("turns[2] output tokens = %v, want 20", got)
+	}
+	if turns[0].Metadata != nil {
+		t.Errorf("user turn metadata = %v, want nil", turns[0].Metadata)
+	}
+}
+
+func TestCostUSD_KnownModelMatchesFormula(t *testing.T) {
+	cost, ok := costUSD("claude-sonnet-4-6", 1_000_000, 1_000_000, 0, 0)
+	if !ok {
+		t.Fatal("expected ok=true for sonnet-4-6")
+	}
+	if cost != 18.0 {
+		t.Errorf("cost = %v, want 18.0 (3 input + 15 output per 1M)",
+			cost)
+	}
+}
+
+func TestCostUSD_UnknownModelReturnsFalse(t *testing.T) {
+	if _, ok := costUSD("claude-mystery", 100, 100, 0, 0); ok {
+		t.Error("expected ok=false for unknown model")
+	}
+}
+
+func abs(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
 
 // contains is a small substring helper to avoid importing strings into

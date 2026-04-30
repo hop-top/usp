@@ -425,3 +425,62 @@ func TestParseTimestamp(t *testing.T) {
 		t.Errorf("parsed = %v, unexpected", parsed)
 	}
 }
+
+func TestAssistantModelFromTurnContext(t *testing.T) {
+	tmp := t.TempDir()
+	root := filepath.Join(tmp, ".codex", "sessions")
+	dayDir := filepath.Join(root, "2026", "02", "13")
+	if err := os.MkdirAll(dayDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	id := "019c557f-437c-7aa2-b991-25a7fbe6355e"
+	fname := "rollout-2026-02-13T05-35-29-" + id + ".jsonl"
+	turnContext := map[string]any{
+		"timestamp": "2026-02-13T05:35:31.956Z",
+		"type":      "turn_context",
+		"payload": map[string]any{
+			"cwd":   "/proj",
+			"model": "gpt-5.3-codex",
+		},
+	}
+	writeJSONL(t, filepath.Join(dayDir, fname),
+		makeMeta(id, "/proj"),
+		turnContext,
+		makeResponseItem("user", "hi"),
+		makeResponseItem("assistant", "hello"),
+	)
+
+	restore := SetSessionsRoot(root)
+	defer restore()
+
+	a := &Adapter{}
+	s, err := a.GetSession(id)
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if got := s.Metadata["assistant.model"]; got != "gpt-5.3-codex" {
+		t.Errorf("assistant.model = %v, want gpt-5.3-codex", got)
+	}
+	if got := s.Metadata["cli_version"]; got != "0.119.0-alpha.11" {
+		t.Errorf("cli_version = %v, want 0.119.0-alpha.11", got)
+	}
+}
+
+func TestAssistantModelAbsentWhenNoTurnContext(t *testing.T) {
+	cwd := "/Users/test/myproject"
+	root := setupSessionTree(t, cwd) // no turn_context events
+
+	restore := SetSessionsRoot(root)
+	defer restore()
+
+	a := &Adapter{}
+	s, err := a.GetSession("019cb730-aaaa-7000-bbbb-ccccddddeeee")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.Metadata["assistant.model"]; ok {
+		t.Errorf("assistant.model should be absent, got %v",
+			s.Metadata["assistant.model"])
+	}
+}

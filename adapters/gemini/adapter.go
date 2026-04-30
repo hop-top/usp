@@ -134,6 +134,10 @@ func (a *Adapter) listAlias(histRoot, alias, cwd string) ([]session.Session, err
 		if info != nil {
 			s.StartedAt = info.ModTime()
 		}
+		if model := readModelFromTranscript(
+			filepath.Join(histDir, name)); model != "" {
+			s.Metadata = map[string]any{"assistant.model": model}
+		}
 		sessions = append(sessions, s)
 	}
 	return sessions, nil
@@ -163,6 +167,13 @@ func (a *Adapter) GetSession(id string) (*session.Session, error) {
 			CLI:        uxp.CLIGemini,
 			ProjectCwd: cwd,
 			StartedAt:  info.ModTime(),
+			Metadata:   map[string]any{},
+		}
+		if model := readModelFromTranscript(p); model != "" {
+			s.Metadata["assistant.model"] = model
+		}
+		if len(s.Metadata) == 0 {
+			s.Metadata = nil
 		}
 		return s, nil
 	}
@@ -333,6 +344,34 @@ func (a *Adapter) loadProjects() (*projectsJSON, error) {
 		pm.Projects = make(map[string]string)
 	}
 	return &pm, nil
+}
+
+// readModelFromTranscript best-effort pulls `assistant.model` from a
+// Gemini chat JSON. Looks at top-level "model" first, then walks
+// history[] for last non-empty per-message model. Returns "" when no
+// model field is present (Gemini schema is loose; future versions may
+// add it). Errors are silent — telemetry is opportunistic.
+func readModelFromTranscript(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var raw struct {
+		Model   string `json:"model"`
+		History []struct {
+			Model string `json:"model"`
+		} `json:"history"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return ""
+	}
+	last := raw.Model
+	for _, m := range raw.History {
+		if m.Model != "" {
+			last = m.Model
+		}
+	}
+	return last
 }
 
 // mapRole translates Gemini role strings to USP roles.

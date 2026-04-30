@@ -12,6 +12,18 @@ import (
 // single coding session from any supported CLI. A session may span
 // multiple CLIs via segments — each segment is one CLI's contribution
 // to the conversation.
+//
+// Metadata key namespaces (adapters populate any subset the source
+// provides; missing keys remain absent — don't write zero values):
+//
+//   - usage.tokens.input        (int)     input tokens
+//   - usage.tokens.output       (int)     output tokens
+//   - usage.tokens.cache_read   (int)     prompt-cache hits
+//   - usage.tokens.cache_write  (int)     prompt-cache writes
+//   - usage.cost_usd            (float64) total cost in USD
+//   - assistant.model           (string)  e.g. "claude-opus-4-7"
+//   - performance.duration_ms   (int64)   wall-clock duration
+//   - cli_version               (string)  source CLI version
 type Session struct {
 	ID         string            `json:"id"`
 	CLI        uxp.CLIName       `json:"cli"`
@@ -36,11 +48,19 @@ type Segment struct {
 }
 
 // Turn represents a single conversational exchange within a session.
+//
+// Subtype distinguishes non-regular turns: "slash-command",
+// "ide-notif", "tool-result", "sidechain". Empty Subtype = regular.
+//
+// Metadata uses the same key conventions as Session.Metadata when the
+// keys are turn-scoped (e.g. usage.tokens.* on assistant turns).
 type Turn struct {
-	Role      Role       `json:"role"`
-	Content   string     `json:"content"`
-	Timestamp time.Time  `json:"timestamp"`
-	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+	Role      Role           `json:"role"`
+	Content   string         `json:"content"`
+	Timestamp time.Time      `json:"timestamp"`
+	ToolCalls []ToolCall     `json:"tool_calls,omitempty"`
+	Subtype   string         `json:"subtype,omitempty"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
 }
 
 // Role identifies the participant in a turn.

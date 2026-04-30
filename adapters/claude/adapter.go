@@ -155,6 +155,10 @@ func (a *Adapter) StreamTurns(id string) (<-chan session.Turn, error) {
 		scanner := bufio.NewScanner(f)
 		scanner.Buffer(make([]byte, 0, 1024*1024), 10*1024*1024)
 
+		// Collect resolved turns first; sidechain reorder needs full slice.
+		var emitted []session.Turn
+		emit := func(t session.Turn) { emitted = append(emitted, t) }
+
 		// pending holds assistant turns with unresolved tool calls.
 		// Tool_use ID → index into pending + ToolCalls for O(1) lookup.
 		var pending []session.Turn
@@ -162,7 +166,7 @@ func (a *Adapter) StreamTurns(id string) (<-chan session.Turn, error) {
 
 		flushAll := func() {
 			for _, t := range pending {
-				ch <- t
+				emit(t)
 			}
 			pending = pending[:0]
 			clear(idIdx)
@@ -185,7 +189,7 @@ func (a *Adapter) StreamTurns(id string) (<-chan session.Turn, error) {
 					}
 					// Flush any fully-resolved pending turns (in order).
 					for len(pending) > 0 && allResolved(pending[0]) {
-						ch <- pending[0]
+						emit(pending[0])
 						// Clean up index entries for flushed turn.
 						for _, tc := range pending[0].ToolCalls {
 							delete(idIdx, tc.ID)
@@ -196,7 +200,7 @@ func (a *Adapter) StreamTurns(id string) (<-chan session.Turn, error) {
 							idIdx[id] = [2]int{idx[0] - 1, idx[1]}
 						}
 					}
-					ch <- turn
+					emit(turn)
 					continue
 				}
 			}
@@ -213,10 +217,14 @@ func (a *Adapter) StreamTurns(id string) (<-chan session.Turn, error) {
 			} else {
 				// Non-tool turn: flush all pending first.
 				flushAll()
-				ch <- turn
+				emit(turn)
 			}
 		}
 		flushAll()
+
+		for _, t := range linkSidechains(emitted) {
+			ch <- t
+		}
 	}()
 	return ch, nil
 }
@@ -322,15 +330,21 @@ func (a *Adapter) findSessionFile(id string) (string, error) {
 
 // jsonlEvent is the raw JSONL schema from Claude Code transcripts.
 type jsonlEvent struct {
-	UUID       string          `json:"uuid"`
-	ParentUUID string          `json:"parentUuid"`
-	Type       string          `json:"type"`
-	Timestamp  string          `json:"timestamp"`
-	SessionID  string          `json:"sessionId"`
-	CWD        string          `json:"cwd"`
-	GitBranch  string          `json:"gitBranch"`
-	Message    json.RawMessage `json:"message"`
+	UUID            string          `json:"uuid"`
+	ParentUUID      string          `json:"parentUuid"`
+	Type            string          `json:"type"`
+	Timestamp       string          `json:"timestamp"`
+	SessionID       string          `json:"sessionId"`
+	CWD             string          `json:"cwd"`
+	GitBranch       string          `json:"gitBranch"`
+	IsSidechain     bool            `json:"isSidechain"`
+	ParentToolUseID string          `json:"parentToolUseID"`
+	Message         json.RawMessage `json:"message"`
 }
+
+// sidechainMetaKey is the Turn.Metadata key holding the parent Task
+// tool_use id for sidechain (sub-agent) turns.
+const sidechainMetaKey = "sidechain.parent_tool_use_id"
 
 type messagePayload struct {
 	Role    string          `json:"role"`
@@ -426,7 +440,83 @@ func eventToTurn(line []byte) (session.Turn, bool) {
 		}
 	}
 
+	if ev.IsSidechain {
+		turn.Subtype = "sidechain"
+		if ev.ParentToolUseID != "" {
+			if turn.Metadata == nil {
+				turn.Metadata = make(map[string]any)
+			}
+			turn.Metadata[sidechainMetaKey] = ev.ParentToolUseID
+		}
+	}
+
 	return turn, true
+}
+
+// linkSidechains reorders turns so sidechain (sub-agent) turns appear
+// directly after the parent assistant turn whose Task tool_use_id they
+// reference via Metadata[sidechainMetaKey]. Stable: relative order of
+// main-thread turns and within each sidechain group is preserved.
+// Orphan sidechain turns (no matching Task tool_use_id) stay in their
+// original position relative to the main thread.
+func linkSidechains(turns []session.Turn) []session.Turn {
+	// Group sidechain turns by parent tool_use id.
+	groups := make(map[string][]session.Turn)
+	hasSidechain := false
+	for _, t := range turns {
+		if t.Subtype != "sidechain" {
+			continue
+		}
+		hasSidechain = true
+		pid, _ := t.Metadata[sidechainMetaKey].(string)
+		if pid == "" {
+			continue
+		}
+		groups[pid] = append(groups[pid], t)
+	}
+	if !hasSidechain {
+		return turns
+	}
+
+	// Index Task tool_use_ids appearing in main-thread assistant turns.
+	taskIDs := make(map[string]bool)
+	for _, t := range turns {
+		if t.Subtype == "sidechain" {
+			continue
+		}
+		for _, tc := range t.ToolCalls {
+			if tc.Name == "Task" && tc.ID != "" {
+				taskIDs[tc.ID] = true
+			}
+		}
+	}
+
+	out := make([]session.Turn, 0, len(turns))
+	emittedGroup := make(map[string]bool)
+	for _, t := range turns {
+		if t.Subtype == "sidechain" {
+			pid, _ := t.Metadata[sidechainMetaKey].(string)
+			// Drop sidechain turns that match a known Task — emitted
+			// alongside the parent below. Orphans flow through.
+			if pid != "" && taskIDs[pid] {
+				continue
+			}
+			out = append(out, t)
+			continue
+		}
+		out = append(out, t)
+		// Append matching sidechain group(s) right after the parent.
+		for _, tc := range t.ToolCalls {
+			if tc.Name != "Task" || tc.ID == "" || emittedGroup[tc.ID] {
+				continue
+			}
+			if grp, ok := groups[tc.ID]; ok {
+				out = append(out, grp...)
+				emittedGroup[tc.ID] = true
+			}
+		}
+	}
+	return out
 }
 
 // extractContent pulls text from message content (string or array).

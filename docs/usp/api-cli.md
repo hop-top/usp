@@ -3,13 +3,8 @@
 Last updated: 2026-04-30
 Author: $USER
 
-Full subcommand reference for `usp`. Generated against `usp version dev`
-(commit `1381303`). Re-generate by running `usp <cmd> --help` after
-each release.
-
-> Convention: this doc only lists flags, args, and examples that exist
-> in the **current** binary. Anything explicitly tracked for a future
-> rename or addition is called out inline with a `Tracking:` note.
+Full subcommand reference for `usp`. Re-generate by running
+`usp <cmd> --help` after each release.
 
 ## Global flags
 
@@ -17,26 +12,25 @@ Every command accepts these:
 
 | Flag | Default | Effect |
 |---|---|---|
+| `--config <path>` | layered search | Path to YAML config file (overrides standard search). |
 | `--format` | `table` | Output format: `table`, `json`, `yaml`. |
 | `--no-color` | off | Disable ANSI colour. |
 | `--no-hints` | off | Suppress next-step hint footer. |
+| `--offline` | off | Disable network operations (placeholder; usp has no network ops yet). |
 | `--quiet` | off | Suppress non-essential output. |
 | `-h`, `--help` | — | Show command help. |
 | `-v`, `--version` | — | Show binary version (root only). |
-
-Tracking: `--config <path>`, `--profile`, `--verbose`, `--chdir`/`-C`
-land with `hop-top/usp#T-0093`. Today, the four globals above plus
-`--help`/`--version` are all there is.
 
 ## Exit codes
 
 | Code | Meaning |
 |---|---|
 | `0` | Success. |
-| `1` | Any failure (usage, runtime, IO, not-found, etc.). |
-
-Tracking: richer codes (2 usage, 3 not-found, 4 exists, …) per the
-`cli-conventions-with-kit.md` §8.1 table land with `hop-top/usp#T-0091`.
+| `1` | Generic error (runtime, IO). |
+| `2` | Usage error (cobra default; bad args/flags). |
+| `3` | Not found (e.g. `session show <missing-id>`). |
+| `4` | Already exists (reserved). |
+| `5` | Unauthorized (reserved). |
 
 ---
 
@@ -50,14 +44,16 @@ Tracking: richer codes (2 usage, 3 not-found, 4 exists, …) per the
 usp [command] [--flags]
 ```
 
-**Top-level commands**
+**Top-level commands** (grouped in help output)
 
-| Command | Purpose |
-|---|---|
-| [`doctor`](#usp-doctor) | Health-check the environment for supported CLIs. |
-| [`install`](#usp-install) | Detect CLIs and (re)build the index. |
-| [`resume`](#usp-resume) | Continue a conversation from one CLI in another. |
-| [`session`](#usp-session) | Manage cross-CLI sessions (sub-tree). |
+| Group | Command | Purpose |
+|---|---|---|
+| KNOWLEDGE | [`session`](#usp-session) | Manage cross-CLI sessions (sub-tree). |
+| LIFECYCLE | [`resume`](#usp-resume) | Continue a conversation from one CLI in another. |
+| ORGANIZE | [`doctor`](#usp-doctor) | Health-check the environment for supported CLIs. |
+| ORGANIZE | [`setup`](#usp-setup) | Detect CLIs and (re)build the index. |
+
+`usp install` remains as a hidden deprecated alias for `usp setup`.
 
 **Examples**
 
@@ -95,43 +91,42 @@ usp doctor --tool claude             # check only the claude adapter
 usp doctor --format json             # machine-readable health report
 ```
 
-**Cross-refs** — [`usp install`](#usp-install) (run install if doctor flags missing index).
+**Cross-refs** — [`usp setup`](#usp-setup) (run if doctor flags missing index).
 
 ---
 
-## `usp install`
+## `usp setup`
 
 **Purpose** — Detect installed CLIs and index their sessions into the
 local SQLite index.
 
-> Tracking: rename to `usp setup` is in flight under
-> `hop-top/usp#T-0090`. Until that lands, use `usp install`.
-
 **Synopsis**
 
 ```sh
-usp install [cli|all] [--format <fmt>]
+usp setup [cli] [--format <fmt>]
 ```
 
 **Args**
 
 | Arg | Default | Effect |
 |---|---|---|
-| `cli\|all` | `all` | Index a single CLI (`claude`, `codex`, …) or every detected CLI. The `all` literal is being phased out — empty arg already means "all". |
+| `cli` | all detected | Index a single CLI (`claude`, `codex`, `gemini`, `opencode`). Empty = all. |
 
 **Flags** — none beyond the globals.
 
 **Examples**
 
 ```sh
-usp install                          # index all detected CLIs
-usp install claude                   # index only Claude Code
-usp install --format json            # JSON summary of what was indexed
+usp setup                            # index all detected CLIs
+usp setup claude                     # index only Claude Code
+usp setup --format json              # JSON summary of what was indexed
 ```
 
-**Cross-refs** — [`usp doctor`](#usp-doctor) (run before install to see what's
-detectable); [`usp session list`](#usp-session-list) (verify the index
-post-install).
+`usp install` is a hidden deprecated alias kept for one release.
+
+**Cross-refs** — [`usp doctor`](#usp-doctor) (run before setup to see
+what's detectable); [`usp session list`](#usp-session-list) (verify the
+index post-setup).
 
 ---
 
@@ -144,28 +139,28 @@ storage, records lineage, and `exec`s the target CLI.
 **Synopsis**
 
 ```sh
-usp resume --tool <cli> [--session <id>]
+usp resume [<id>] --tool <cli>
 ```
 
-**Args** — none.
+**Args**
+
+| Arg | Default | Effect |
+|---|---|---|
+| `<id>` | most recent for cwd | Source session ID (full UUID). |
 
 **Flags**
 
 | Flag | Default | Effect |
 |---|---|---|
 | `--tool <cli>` | _required_ | Target CLI to resume in (`claude`, `codex`, `gemini`, `opencode`). |
-| `--session <id>` | most recent for cwd | Source session ID. |
-
-> Tracking: making the source ID positional (`usp resume <id> --tool ...`)
-> is `hop-top/usp#T-0092` (F-4 in the parity review). Once it lands,
-> `--session` becomes a hidden alias for one minor.
+| `--session <id>` | _deprecated_ | Hidden alias for the positional `<id>`; one-release deprecation. |
 
 **Examples**
 
 ```sh
-usp resume --tool codex                              # most recent session for cwd → Codex
-usp resume --tool gemini --session a1b2c3d4-...      # explicit source session
-usp resume --tool claude                             # round-trip back to Claude
+usp resume --tool codex                       # most recent session for cwd → Codex
+usp resume a1b2c3d4-... --tool gemini         # explicit source session
+usp resume --tool claude                      # round-trip back to Claude
 ```
 
 **Behaviour notes**
@@ -352,11 +347,10 @@ There is no `make docs` target yet (justfile doesn't include one). To
 regenerate manually:
 
 ```sh
-for cmd in "" doctor install resume session "session list" "session search" \
+for cmd in "" doctor setup resume session "session list" "session search" \
            "session show" "session lineage"; do
     echo "### usp $cmd"; usp $cmd --help; echo
 done
 ```
 
-Tracking: cobra-docgen integration is scoped under
-`hop-top/usp#T-0094` follow-up.
+Cobra-docgen integration could automate this; not yet wired.

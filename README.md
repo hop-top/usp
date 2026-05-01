@@ -229,7 +229,7 @@ and data flow.
 - [CHANGELOG.md](CHANGELOG.md) — release history.
 - [docs/usp/api-cli.md](docs/usp/api-cli.md) — full subcommand reference.
 - [docs/usp/configuration.md](docs/usp/configuration.md) — config keys
-  and env vars (target shape; T-0093 in flight).
+  and env vars.
 - [docs/architecture.md](docs/architecture.md) — internal layout.
 
 ## Status

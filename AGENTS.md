@@ -41,15 +41,19 @@ are tolerant of schema additions and skip unknown event types.
 
 ```sh
 usp doctor                           # health-check all CLIs + DBs
-usp install                          # detect CLIs and build the index
+usp setup                            # detect CLIs and build the index
 usp session list                     # list sessions, all CLIs, newest first
 usp session list --format json       # machine-readable; preferred for agents
 usp session show <full-uuid>         # turn-by-turn metadata + content
 usp session search "<query>"         # FTS over indexed session content
 usp session lineage <full-uuid>      # cross-CLI continuation chain
 usp resume --tool <cli>              # continue most recent session in <cli>
-usp resume --session <id> --tool <cli>  # resume a specific source session
+usp resume <id> --tool <cli>         # resume a specific source session
 ```
+
+`usp install` is a hidden deprecated alias for `usp setup`. `usp resume
+--session <id>` is a hidden deprecated alias for the positional form.
+Both still work for one release; prefer the new spelling.
 
 Full per-command flag reference: [`docs/usp/api-cli.md`](docs/usp/api-cli.md).
 
@@ -66,16 +70,11 @@ apply when the variable is unset.
 | `XDG_DATA_HOME` | Index DB (`index.db`) | `~/.local/share/usp/index.db` |
 | `XDG_CONFIG_HOME` | Config file (when supported) | `~/.config/usp/config.yaml` |
 
-> Heads-up: today the paths are still hardcoded under `~/.local/state/usp/`
-> and `~/.local/share/usp/` regardless of `XDG_*`. Migration to the kit
-> `xdg` helper is tracked under `hop-top/usp#T-0084`. Configuration-file
-> support is tracked under `hop-top/usp#T-0093`. Treat the variable
-> mapping above as the **target** behaviour; document new code against
-> it so the migration is a no-op for callers.
-
-There are no other usp-specific env vars at the moment. See
-[`docs/usp/configuration.md`](docs/usp/configuration.md) for the planned
-`USP_*` env-var surface that will land alongside config-file support.
+XDG paths and config file are wired (T-0084, T-0093). `XDG_*`
+overrides honored end-to-end. `USP_*` env vars override config; CLI
+flags override env. See
+[`docs/usp/configuration.md`](docs/usp/configuration.md) for the full
+key list and precedence.
 
 ## JSONL parsing gotchas
 
@@ -127,9 +126,9 @@ In all cases: prefer calling `usp` over reparsing yourself.
   `~/.local/share/usp/index.db`).
 - Engine: SQLite, with an FTS5 virtual table over session content for
   fast `usp session search`.
-- Built by `usp install`. Re-run `usp install` after a long pause to
-  pick up new sessions; the install command is idempotent (will be
-  renamed to `usp setup`; tracked `hop-top/usp#T-0090`).
+- Built by `usp setup`. Re-run after a long pause to pick up new
+  sessions; the command is idempotent. `usp install` remains a hidden
+  deprecated alias.
 
 ## Calling usp from an agent
 
@@ -153,9 +152,9 @@ A few rules of thumb:
    `Resuming in <cli> ...` to stderr before exec-ing; `session list/
    search/show` print results to stdout via `kit/output.Render`. Pipe
    stdout, not 2>&1.
-5. **Exit codes are 0 (ok) or 1 (any error) today.** Richer codes
-   (2 usage, 3 not-found, 4 exists, etc.) are tracked under
-   `hop-top/usp#T-0091`; do not branch on specific non-zero codes yet.
+5. **Exit codes** (per cli-conventions §8.1): `0` ok, `1` generic
+   error, `2` usage, `3` not found (e.g. `session show <missing-id>`).
+   Codes `4` (exists) / `5` (unauthorized) reserved.
 
 ## Pre-merge gate
 

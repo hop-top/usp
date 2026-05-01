@@ -28,6 +28,18 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Signals reference table in README and architecture docs (T-0083).
 - `AGENTS.md`, `docs/usp/api-cli.md`, `docs/usp/configuration.md`,
   this `CHANGELOG.md` (T-0094).
+- `usp setup` command (T-0090) — replaces `usp install` (kept as a
+  hidden deprecated alias for one release).
+- Help-output groups (KNOWLEDGE / LIFECYCLE / ORGANIZE) so `usp --help`
+  scans cleanly as the surface grows (T-0089).
+- Richer exit codes per cli-conventions §8.1: `2` usage, `3` not found
+  (T-0091). `4` exists / `5` unauthorized reserved.
+- Next-step hints printed to stderr after successful runs; suppressed by
+  `--no-hints` or non-tty stdout (T-0092).
+- `--config <path>` and `--offline` global flags; layered config loader
+  via `kit/config` honoring `/etc/usp/`, `$XDG_CONFIG_HOME/usp/`,
+  `./.usp.yaml`, `--config`, `USP_*` env, then CLI flags (T-0093).
+- Initial config keys: `default_tool`, `default_limit`.
 
 ### Changed
 
@@ -35,6 +47,16 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   identifies entities via their mentions instead of opaque source keys.
 - `usp-ctxt` projection emits mentions instead of source-key strings
   (T-0068).
+- `usp resume` takes the source ID positionally: `usp resume <id>
+  --tool <cli>` (T-0087). `--session <id>` is a hidden deprecated alias.
+- `--format` now inherits from the root global; per-subcommand
+  redeclarations removed (T-0088).
+- Lineage and index DB paths honor `XDG_STATE_HOME` / `XDG_DATA_HOME`
+  via `kit/xdg`; defaults unchanged (T-0084).
+- `usp doctor` and `usp setup` render via `kit/output.Render`, so
+  `--format json|yaml` works end-to-end (T-0085).
+- Default `slog` handler routes to stderr via `kit/log`; `-V` / `--quiet`
+  control level (T-0086).
 
 ## [0.1.0] — 2026-04-30
 
@@ -72,13 +94,10 @@ Initial public release.
 
 ### Known issues
 
-- Paths are hardcoded under `~/.local/state/usp/` and
-  `~/.local/share/usp/`; XDG migration is tracked under T-0084.
-- No config-file support yet; layered loader tracked under T-0093.
-- Exit codes collapse every error to `1`; richer codes tracked under
-  T-0091.
-- `usp resume` takes the source ID via `--session` flag; positional
-  form tracked under T-0092.
+- Partial-UUID prefix lookup not yet supported in `usp session show`
+  / `lineage` / `lineage <id>`; full UUID required (T-0061).
+- `--help-all` not auto-wired (kit v0.3.2-patch.3 lacks
+  `cli.HelpConfig`); groups still render under `--help`.
 
 [Unreleased]: https://github.com/hop-top/usp/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/hop-top/usp/releases/tag/v0.1.0

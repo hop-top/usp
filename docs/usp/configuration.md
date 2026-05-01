@@ -3,26 +3,19 @@
 Last updated: 2026-04-30
 Author: $USER
 
-> **Status:** target shape. As of `usp version dev` (commit `1381303`),
-> `usp` ships with **no config-file support**. The only configurable
-> knobs today are CLI flags. Layered config via `kit/config` is tracked
-> as `hop-top/usp#T-0093` (F-11 in the parity review). This doc describes
-> the post-T-0093 surface so callers can plan against it; once T-0093
-> lands, the document should be moved out of "target shape" status.
+> **Status:** live. Layered config via `kit/config` shipped in T-0093.
 
 ## Loader precedence
 
-When configuration support lands, the kit `config.Loader` resolves keys
-in the following order, with **later sources winning** over earlier
-ones:
+Keys are resolved in the following order, with **later sources winning**
+over earlier ones:
 
 1. Compiled-in defaults.
 2. `/etc/usp/config.yaml` (system-wide).
 3. `$XDG_CONFIG_HOME/usp/config.yaml` (default
    `~/.config/usp/config.yaml`).
 4. `./.usp.yaml` (project-local; walks up from cwd to find the nearest).
-5. `--config <path>` (explicit override; not yet implemented; tracked
-   `hop-top/usp#T-0093`).
+5. `--config <path>` (explicit override).
 6. Environment variables (`USP_*`).
 7. CLI flags.
 

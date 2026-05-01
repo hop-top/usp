@@ -68,6 +68,7 @@ func main() {
 		installCmd(), // hidden deprecation alias
 	)
 	applyCommandGroups(root.Cmd)
+	registerHints(root)
 
 	if err := root.Execute(context.Background()); err != nil {
 		var ee *exitErr

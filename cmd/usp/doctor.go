@@ -53,7 +53,18 @@ func doctorCmd() *cobra.Command {
 			doc.Add(checkProjectIndex())
 
 			results := doc.Run()
-			return output.Render(os.Stdout, formatFromViper(), toDoctorRows(results))
+			doctorHadFailure = false
+			for _, c := range results {
+				if c.Status == uxp.StatusFail {
+					doctorHadFailure = true
+					break
+				}
+			}
+			if err := output.Render(os.Stdout, formatFromViper(), toDoctorRows(results)); err != nil {
+				return err
+			}
+			emitHint("doctor")
+			return nil
 		},
 	}
 

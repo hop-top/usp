@@ -150,6 +150,8 @@ func resumeCmd() *cobra.Command {
 
 			slog.Info("resuming session",
 				"target", toolFlag, "session", nativeID)
+			resumeLastUSPID = uspID
+			emitHint("resume")
 
 			// Hand off to target CLI.
 			argv := target.ResumeCmd(nativeID)

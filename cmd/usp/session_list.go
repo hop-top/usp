@@ -50,13 +50,15 @@ func sessionListCmd() *cobra.Command {
 			all = sessionutil.SortAndLimit(all, limit)
 
 			if len(all) == 0 {
+				listEmptyResult = true
+				defer emitHint("list")
 				if format != output.Table {
 					return output.Render(os.Stdout, format, []sessionRow{})
 				}
 				fmt.Fprintln(os.Stderr, "No sessions found.")
 				return nil
 			}
-
+			listEmptyResult = false
 			return output.Render(os.Stdout, format, toRows(all))
 		},
 	}

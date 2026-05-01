@@ -28,7 +28,11 @@ func setupCmd() *cobra.Command {
 		Short: "Detect CLIs and index sessions",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			return runSetup(args)
+			if err := runSetup(args); err != nil {
+				return err
+			}
+			emitHint("setup")
+			return nil
 		},
 	}
 }
@@ -42,7 +46,11 @@ func installCmd() *cobra.Command {
 		Args:   cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			slog.Warn("install is deprecated; use `setup` instead")
-			return runSetup(args)
+			if err := runSetup(args); err != nil {
+				return err
+			}
+			emitHint("install")
+			return nil
 		},
 	}
 }

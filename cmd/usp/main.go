@@ -38,12 +38,17 @@ func main() {
 			xrrutil.Mode(), xrrutil.CassetteDir())
 	}
 
+	for _, g := range rootGroups() {
+		root.Cmd.AddGroup(g)
+	}
+
 	root.Cmd.AddCommand(
 		sessionCmd(root),
 		resumeCmd(),
 		doctorCmd(),
 		installCmd(),
 	)
+	applyCommandGroups(root.Cmd)
 
 	if err := root.Execute(context.Background()); err != nil {
 		os.Exit(1)

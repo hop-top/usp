@@ -223,6 +223,15 @@ Adapters are thin: 250-600 LOC each. See
 [docs/architecture.md](docs/architecture.md) for the contract
 and data flow.
 
+## Project docs
+
+- [AGENTS.md](AGENTS.md) — what an agent needs to know to use `usp`.
+- [CHANGELOG.md](CHANGELOG.md) — release history.
+- [docs/usp/api-cli.md](docs/usp/api-cli.md) — full subcommand reference.
+- [docs/usp/configuration.md](docs/usp/configuration.md) — config keys
+  and env vars (target shape; T-0093 in flight).
+- [docs/architecture.md](docs/architecture.md) — internal layout.
+
 ## Status
 
 Alpha (`v0.0.1-alpha.1`). Envelope schema may change.

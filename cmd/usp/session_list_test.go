@@ -12,27 +12,19 @@ func TestSessionListCmd_Flags(t *testing.T) {
 		t.Fatalf("Use = %q, want %q", cmd.Use, "list")
 	}
 
-	for _, name := range []string{"project", "tool", "since", "limit", "format"} {
+	// --format is inherited from root persistent flag.
+	for _, name := range []string{"project", "tool", "since", "limit"} {
 		if cmd.Flags().Lookup(name) == nil {
 			t.Errorf("missing flag %q", name)
 		}
 	}
 
-	// Verify default values.
 	lim, err := cmd.Flags().GetInt("limit")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if lim != 20 {
 		t.Errorf("limit default = %d, want 20", lim)
-	}
-
-	fmt, err := cmd.Flags().GetString("format")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if fmt != "table" {
-		t.Errorf("format default = %q, want %q", fmt, "table")
 	}
 }
 

@@ -28,13 +28,13 @@ func sessionListCmd() *cobra.Command {
 		tool    string
 		since   string
 		limit   int
-		format  string
 	)
 
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List sessions across all supported CLIs",
 		RunE: func(_ *cobra.Command, _ []string) error {
+			format := formatFromViper()
 			adapters := sessionutil.FilterAdapters(allAdapters(), tool)
 			if adapters == nil {
 				return fmt.Errorf("unknown CLI %q", tool)
@@ -51,7 +51,7 @@ func sessionListCmd() *cobra.Command {
 
 			if len(all) == 0 {
 				if format != output.Table {
-					return output.Render(os.Stdout, output.Format(format), []sessionRow{})
+					return output.Render(os.Stdout, format, []sessionRow{})
 				}
 				fmt.Fprintln(os.Stderr, "No sessions found.")
 				return nil
@@ -69,8 +69,6 @@ func sessionListCmd() *cobra.Command {
 		"Show sessions since date (e.g. 2026-04-01, 7d, 24h)")
 	cmd.Flags().IntVar(&limit, "limit", 20,
 		"Maximum sessions to display")
-	cmd.Flags().StringVar(&format, "format", "table",
-		"Output format (table, json, yaml)")
 	return cmd
 }
 
@@ -80,7 +78,6 @@ func sessionSearchCmd() *cobra.Command {
 		tool    string
 		since   string
 		limit   int
-		format  string
 	)
 
 	cmd := &cobra.Command{
@@ -88,6 +85,7 @@ func sessionSearchCmd() *cobra.Command {
 		Short: "Search session content across all CLIs",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
+			format := formatFromViper()
 			query := strings.ToLower(args[0])
 
 			adapters := sessionutil.FilterAdapters(allAdapters(), tool)
@@ -130,7 +128,7 @@ func sessionSearchCmd() *cobra.Command {
 
 			if len(matched) == 0 {
 				if format != output.Table {
-					return output.Render(os.Stdout, output.Format(format), []sessionRow{})
+					return output.Render(os.Stdout, format, []sessionRow{})
 				}
 				fmt.Fprintln(os.Stderr, "No matching sessions.")
 				return nil
@@ -148,8 +146,6 @@ func sessionSearchCmd() *cobra.Command {
 		"Search sessions since date (e.g. 2026-04-01, 7d, 24h)")
 	cmd.Flags().IntVar(&limit, "limit", 20,
 		"Maximum results")
-	cmd.Flags().StringVar(&format, "format", "table",
-		"Output format (table, json, yaml)")
 	return cmd
 }
 

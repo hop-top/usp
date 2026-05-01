@@ -68,7 +68,6 @@ type showTurn struct {
 func sessionShowCmd() *cobra.Command {
 	var (
 		cliFlag string
-		format  string
 		project string
 		since   string
 	)
@@ -118,7 +117,7 @@ func sessionShowCmd() *cobra.Command {
 				ended = sess.EndedAt.Format("2006-01-02 15:04:05")
 			}
 
-			return output.Render(os.Stdout, output.Format(format), showResult{
+			return output.Render(os.Stdout, formatFromViper(), showResult{
 				ID:        sess.ID,
 				CLI:       matchedCLI,
 				Project:   sess.ProjectCwd,
@@ -130,8 +129,6 @@ func sessionShowCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&cliFlag, "tool", "", "Restrict search to a specific CLI")
-	cmd.Flags().StringVar(&format, "format", "table",
-		"Output format (table, json, yaml)")
 	cmd.Flags().StringVar(&project, "project", "",
 		"Narrow prefix match to project dir")
 	cmd.Flags().StringVar(&since, "since", "",

@@ -17,7 +17,8 @@ func TestArgsSessionListFlags(t *testing.T) {
 	cmd := sessionListCmd()
 	stubRunE(cmd)
 
-	for _, name := range []string{"project", "tool", "since", "limit", "format"} {
+	// --format is inherited from the root persistent flag.
+	for _, name := range []string{"project", "tool", "since", "limit"} {
 		if cmd.Flags().Lookup(name) == nil {
 			t.Errorf("missing flag %q", name)
 		}
@@ -25,9 +26,6 @@ func TestArgsSessionListFlags(t *testing.T) {
 
 	if v, _ := cmd.Flags().GetInt("limit"); v != 20 {
 		t.Errorf("limit default = %d, want 20", v)
-	}
-	if v, _ := cmd.Flags().GetString("format"); v != "table" {
-		t.Errorf("format default = %q, want %q", v, "table")
 	}
 	for _, name := range []string{"project", "tool", "since"} {
 		if v, _ := cmd.Flags().GetString(name); v != "" {
@@ -50,9 +48,7 @@ func TestArgsSessionShowRequiresOneArg(t *testing.T) {
 	if cmd.Flags().Lookup("tool") == nil {
 		t.Error("missing --tool flag")
 	}
-	if cmd.Flags().Lookup("format") == nil {
-		t.Error("missing --format flag")
-	}
+	// --format is inherited from root persistent flags.
 
 	// 0 args.
 	cmd.SetArgs([]string{})

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -12,7 +13,7 @@ import (
 	"hop.top/usp/index"
 )
 
-// installRow is the table-renderable row for the install/setup summary.
+// installRow is the table-renderable row for the setup/install summary.
 type installRow struct {
 	CLI      string `table:"CLI"      json:"cli"               yaml:"cli"`
 	Version  string `table:"VERSION"  json:"version"           yaml:"version"`
@@ -21,12 +22,26 @@ type installRow struct {
 	Error    string `table:"-"        json:"error,omitempty"   yaml:"error,omitempty"`
 }
 
-func installCmd() *cobra.Command {
+func setupCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "install [cli]",
+		Use:   "setup [cli]",
 		Short: "Detect CLIs and index sessions",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
+			return runSetup(args)
+		},
+	}
+}
+
+// installCmd is the deprecated alias for setupCmd.
+func installCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:    "install [cli]",
+		Short:  "(deprecated) Use `usp setup` instead",
+		Hidden: true,
+		Args:   cobra.MaximumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			slog.Warn("install is deprecated; use `setup` instead")
 			return runSetup(args)
 		},
 	}

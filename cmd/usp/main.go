@@ -46,7 +46,8 @@ func main() {
 		sessionCmd(root),
 		resumeCmd(),
 		doctorCmd(),
-		installCmd(),
+		setupCmd(),
+		installCmd(), // hidden deprecation alias
 	)
 	applyCommandGroups(root.Cmd)
 

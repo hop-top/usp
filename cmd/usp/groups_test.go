@@ -15,6 +15,7 @@ func TestRootGroupsRegistered(t *testing.T) {
 		sessionCmd(root),
 		resumeCmd(),
 		doctorCmd(),
+		setupCmd(),
 		installCmd(),
 	)
 	applyCommandGroups(root.Cmd)
@@ -44,6 +45,7 @@ func TestHelpDoesNotErrorWithGroups(t *testing.T) {
 		sessionCmd(root),
 		resumeCmd(),
 		doctorCmd(),
+		setupCmd(),
 		installCmd(),
 	)
 	applyCommandGroups(root.Cmd)

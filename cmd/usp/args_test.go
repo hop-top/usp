@@ -152,8 +152,8 @@ func TestArgsDoctorFlags(t *testing.T) {
 	}
 }
 
-func TestArgsInstallAcceptsZeroOrOneArg(t *testing.T) {
-	cmd := installCmd()
+func TestArgsSetupAcceptsZeroOrOneArg(t *testing.T) {
+	cmd := setupCmd()
 	stubRunE(cmd)
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
@@ -161,11 +161,6 @@ func TestArgsInstallAcceptsZeroOrOneArg(t *testing.T) {
 	cmd.SetArgs([]string{})
 	if err := cmd.Execute(); err != nil {
 		t.Errorf("0 args should succeed: %v", err)
-	}
-
-	cmd.SetArgs([]string{"all"})
-	if err := cmd.Execute(); err != nil {
-		t.Errorf(`"all" should succeed: %v`, err)
 	}
 
 	cmd.SetArgs([]string{"claude"})
@@ -176,6 +171,21 @@ func TestArgsInstallAcceptsZeroOrOneArg(t *testing.T) {
 	cmd.SetArgs([]string{"claude", "codex"})
 	if err := cmd.Execute(); err == nil {
 		t.Error("expected error with 2 args")
+	}
+}
+
+func TestArgsInstallStillWorksAsHiddenAlias(t *testing.T) {
+	cmd := installCmd()
+	if !cmd.Hidden {
+		t.Error("install command should be Hidden (deprecated alias)")
+	}
+	stubRunE(cmd)
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+
+	cmd.SetArgs([]string{})
+	if err := cmd.Execute(); err != nil {
+		t.Errorf("install (hidden) 0 args should succeed: %v", err)
 	}
 }
 
@@ -225,6 +235,7 @@ func TestArgsCommandWiring(t *testing.T) {
 		sessionCmd(root),
 		resumeCmd(),
 		doctorCmd(),
+		setupCmd(),
 		installCmd(),
 	)
 
@@ -232,7 +243,7 @@ func TestArgsCommandWiring(t *testing.T) {
 	for _, c := range root.Cmd.Commands() {
 		rootNames[c.Name()] = true
 	}
-	for _, want := range []string{"session", "resume", "doctor", "install"} {
+	for _, want := range []string{"session", "resume", "doctor", "setup", "install"} {
 		if !rootNames[want] {
 			t.Errorf("root missing subcommand %q", want)
 		}

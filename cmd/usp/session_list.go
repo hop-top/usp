@@ -33,8 +33,17 @@ func sessionListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List sessions across all supported CLIs",
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(c *cobra.Command, _ []string) error {
 			format := formatFromViper()
+			// Honor config defaults when flags weren't explicitly set.
+			if !c.Flags().Changed("tool") && tool == "" {
+				tool = rootViper.GetString("default_tool")
+			}
+			if !c.Flags().Changed("limit") {
+				if v := rootViper.GetInt("default_limit"); v > 0 {
+					limit = v
+				}
+			}
 			adapters := sessionutil.FilterAdapters(allAdapters(), tool)
 			if adapters == nil {
 				return fmt.Errorf("unknown CLI %q", tool)
@@ -86,10 +95,18 @@ func sessionSearchCmd() *cobra.Command {
 		Use:   "search <query>",
 		Short: "Search session content across all CLIs",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(c *cobra.Command, args []string) error {
 			format := formatFromViper()
 			query := strings.ToLower(args[0])
 
+			if !c.Flags().Changed("tool") && tool == "" {
+				tool = rootViper.GetString("default_tool")
+			}
+			if !c.Flags().Changed("limit") {
+				if v := rootViper.GetInt("default_limit"); v > 0 {
+					limit = v
+				}
+			}
 			adapters := sessionutil.FilterAdapters(allAdapters(), tool)
 			if adapters == nil {
 				return fmt.Errorf("unknown CLI %q", tool)

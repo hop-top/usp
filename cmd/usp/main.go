@@ -50,6 +50,11 @@ func main() {
 	// "quiet"/"no-color"). Logger implements slog.Handler.
 	slog.SetDefault(slog.New(kitlog.New(root.Viper)))
 
+	registerConfigGlobals(root.Cmd, root.Viper)
+	if _, err := loadConfig(root.Viper); err != nil {
+		fmt.Fprintf(root.Cmd.ErrOrStderr(), "config: %v\n", err)
+	}
+
 	if xrrutil.Active() {
 		fmt.Fprintf(root.Cmd.ErrOrStderr(),
 			"xrr: mode=%s cassette_dir=%s\n",

@@ -34,11 +34,11 @@ func installCmd() *cobra.Command {
 			}
 
 			// Open/create project index.
-			idxPath := defaultIndexPath()
-			if idxPath == "" {
-				return fmt.Errorf("cannot determine home directory")
+			idxPath, err := indexDBPath()
+			if err != nil {
+				return fmt.Errorf("resolve index path: %w", err)
 			}
-			if err := os.MkdirAll(filepath.Dir(idxPath), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(idxPath), 0o750); err != nil {
 				return fmt.Errorf("create index dir: %w", err)
 			}
 
@@ -97,14 +97,7 @@ func installCmd() *cobra.Command {
 			fmt.Fprintf(w, "Summary: %d/%d CLIs detected, %d sessions indexed\n",
 				detected, len(names), totalSessions)
 
-			home, _ := os.UserHomeDir()
-			rel := idxPath
-			if home != "" {
-				if r, err := filepath.Rel(home, idxPath); err == nil {
-					rel = "~/" + r
-				}
-			}
-			fmt.Fprintf(w, "Index: %s\n", rel)
+			fmt.Fprintf(w, "Index: %s\n", idxPath)
 
 			return nil
 		},

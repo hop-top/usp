@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"hop.top/kit/xdg"
 	"hop.top/usp/internal/sessionutil"
 	"hop.top/usp/lineage"
 	"hop.top/usp/session"
@@ -103,13 +104,14 @@ func resumeCmd() *cobra.Command {
 			}
 
 			// Record lineage.
-			home, err := os.UserHomeDir()
+			stateDir, err := xdg.StateDir("usp")
 			if err != nil {
-				return fmt.Errorf("home dir: %w", err)
+				return fmt.Errorf("state dir: %w", err)
 			}
-			dbPath := filepath.Join(
-				home, ".local", "state", "usp", "sessions.db",
-			)
+			if err := os.MkdirAll(stateDir, 0o750); err != nil {
+				return fmt.Errorf("create state dir: %w", err)
+			}
+			dbPath := filepath.Join(stateDir, "sessions.db")
 			store, err := lineage.Open(dbPath)
 			if err != nil {
 				return fmt.Errorf("lineage store: %w", err)

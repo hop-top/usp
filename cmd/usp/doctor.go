@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -16,15 +15,6 @@ var statusSyms = [4]string{
 	"\033[33m⚠\033[0m", // Warn
 	"\033[31m✗\033[0m", // Fail
 	"\033[90m—\033[0m", // Skip
-}
-
-// defaultIndexPath returns the conventional project index DB path.
-func defaultIndexPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ".local", "share", "usp", "index.db")
 }
 
 func doctorCmd() *cobra.Command {
@@ -112,11 +102,12 @@ func checkStoreReadable(cli uxp.CLIName, reg *uxp.CLIRegistry) uxp.CheckFunc {
 func checkProjectIndex() uxp.CheckFunc {
 	return func() uxp.Check {
 		label := "project-index"
-		p := defaultIndexPath()
-		if p == "" {
+		p, err := indexDBPath()
+		if err != nil {
 			return uxp.Check{
 				Name: label, Status: uxp.StatusWarn,
-				Message: "cannot determine home directory",
+				Message: "cannot resolve data dir",
+				Detail:  err.Error(),
 			}
 		}
 

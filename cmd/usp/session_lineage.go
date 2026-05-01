@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"hop.top/usp/internal/sessionutil"
@@ -46,6 +47,9 @@ func tryNativeLineage(id string) error {
 	s, _, _, err := sessionutil.ResolveSessionID(
 		id, adapters, adapterOrder(id))
 	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return exitNotFound(err)
+		}
 		return err
 	}
 	s.Segments = []session.Segment{{

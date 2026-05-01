@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"hop.top/kit/output"
@@ -97,6 +98,9 @@ func sessionShowCmd() *cobra.Command {
 			sess, matchedCLI, a, err := sessionutil.ResolveSessionID(
 				id, adapters, adapterOrder(id), opts)
 			if err != nil {
+				if strings.Contains(err.Error(), "not found") {
+					return exitNotFound(err)
+				}
 				return err
 			}
 			ch, err := a.StreamTurns(sess.ID)

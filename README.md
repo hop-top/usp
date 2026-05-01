@@ -123,7 +123,7 @@ for the mention/hint vocabulary emitted into ctxt.
 go install hop.top/usp/cmd/usp@latest
 
 usp doctor               # what's installed, what's readable
-usp setup                # index detected CLIs (alias: usp install)
+usp setup                # index detected CLIs
 usp session list         # all sessions, all CLIs, sorted
 usp session show <id>    # full session detail
 usp session search auth  # find sessions mentioning "auth"

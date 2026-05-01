@@ -25,9 +25,6 @@ func registerHints(root *cli.Root) {
 	root.Hints.Register("setup", output.Hint{
 		Message: "Try `usp session list` to view indexed sessions.",
 	})
-	root.Hints.Register("install", output.Hint{
-		Message: "Try `usp session list` to view indexed sessions.",
-	})
 	root.Hints.Register("doctor", output.Hint{
 		Message:   "Run `usp setup <cli>` to fix.",
 		Condition: func() bool { return doctorHadFailure },

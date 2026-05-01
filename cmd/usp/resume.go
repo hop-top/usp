@@ -17,10 +17,7 @@ import (
 )
 
 func resumeCmd() *cobra.Command {
-	var (
-		toolFlag    string
-		sessionFlag string
-	)
+	var toolFlag string
 
 	cmd := &cobra.Command{
 		Use:   "resume [<id>]",
@@ -32,17 +29,9 @@ func resumeCmd() *cobra.Command {
 				return fmt.Errorf("getwd: %w", err)
 			}
 
-			// Resolve source session id: positional wins; --session is
-			// a deprecated alias kept for one release.
 			id := ""
-			switch {
-			case len(args) == 1 && sessionFlag != "":
-				return fmt.Errorf("use only one of <id> or --session")
-			case len(args) == 1:
+			if len(args) == 1 {
 				id = args[0]
-			case sessionFlag != "":
-				slog.Warn("--session is deprecated; pass <id> as a positional arg")
-				id = sessionFlag
 			}
 
 			adapters := allAdapters()
@@ -165,9 +154,6 @@ func resumeCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&toolFlag, "tool", "",
 		"Target CLI to resume in (claude, codex, gemini, opencode)")
-	cmd.Flags().StringVar(&sessionFlag, "session", "",
-		"Source session ID (deprecated: pass <id> as positional arg)")
-	_ = cmd.Flags().MarkHidden("session")
 	return cmd
 }
 

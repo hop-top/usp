@@ -53,8 +53,6 @@ usp [command] [--flags]
 | ORGANIZE | [`doctor`](#usp-doctor) | Health-check the environment for supported CLIs. |
 | ORGANIZE | [`setup`](#usp-setup) | Detect CLIs and (re)build the index. |
 
-`usp install` remains as a hidden deprecated alias for `usp setup`.
-
 **Examples**
 
 ```sh
@@ -91,7 +89,8 @@ usp doctor --tool claude             # check only the claude adapter
 usp doctor --format json             # machine-readable health report
 ```
 
-**Cross-refs** — [`usp setup`](#usp-setup) (run if doctor flags missing index).
+**Cross-refs** — [`usp setup`](#usp-setup) (run if doctor flags
+missing index).
 
 ---
 
@@ -122,8 +121,6 @@ usp setup claude                     # index only Claude Code
 usp setup --format json              # JSON summary of what was indexed
 ```
 
-`usp install` is a hidden deprecated alias kept for one release.
-
 **Cross-refs** — [`usp doctor`](#usp-doctor) (run before setup to see
 what's detectable); [`usp session list`](#usp-session-list) (verify the
 index post-setup).
@@ -153,7 +150,6 @@ usp resume [<id>] --tool <cli>
 | Flag | Default | Effect |
 |---|---|---|
 | `--tool <cli>` | _required_ | Target CLI to resume in (`claude`, `codex`, `gemini`, `opencode`). |
-| `--session <id>` | _deprecated_ | Hidden alias for the positional `<id>`; one-release deprecation. |
 
 **Examples**
 

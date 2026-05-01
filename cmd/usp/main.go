@@ -70,7 +70,6 @@ func main() {
 		resumeCmd(),
 		doctorCmd(),
 		setupCmd(),
-		installCmd(), // hidden deprecation alias
 	)
 	applyCommandGroups(root.Cmd)
 	registerHints(root)

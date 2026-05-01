@@ -9,7 +9,7 @@ import (
 )
 
 func TestInstallRowsTableTags(t *testing.T) {
-	rows := []installRow{
+	rows := []setupRow{
 		{CLI: "claude", Version: "v1.2.3", Status: "✓", Sessions: "5"},
 	}
 	var buf bytes.Buffer
@@ -25,7 +25,7 @@ func TestInstallRowsTableTags(t *testing.T) {
 }
 
 func TestInstallRowsYAMLRender(t *testing.T) {
-	rows := []installRow{
+	rows := []setupRow{
 		{CLI: "codex", Version: "v0.1.0", Status: "✓", Sessions: "3"},
 	}
 	var buf bytes.Buffer
@@ -42,7 +42,7 @@ func TestInstallRowsYAMLRender(t *testing.T) {
 }
 
 func TestInstallRowsJSONRender(t *testing.T) {
-	rows := []installRow{
+	rows := []setupRow{
 		{CLI: "gemini", Version: "v0.0.1", Status: "✓", Sessions: "0"},
 	}
 	var buf bytes.Buffer

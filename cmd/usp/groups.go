@@ -8,7 +8,6 @@ var commandGroups = map[string]string{
 	"session": "knowledge",
 	"resume":  "lifecycle",
 	"doctor":  "organize",
-	"install": "organize",
 	"setup":   "organize",
 }
 

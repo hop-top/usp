@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -13,8 +12,8 @@ import (
 	"hop.top/usp/index"
 )
 
-// installRow is the table-renderable row for the setup/install summary.
-type installRow struct {
+// setupRow is the table-renderable row for the setup summary.
+type setupRow struct {
 	CLI      string `table:"CLI"      json:"cli"               yaml:"cli"`
 	Version  string `table:"VERSION"  json:"version"           yaml:"version"`
 	Status   string `table:"STATUS"   json:"status"            yaml:"status"`
@@ -37,25 +36,6 @@ func setupCmd() *cobra.Command {
 	}
 }
 
-// installCmd is the deprecated alias for setupCmd.
-func installCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:    "install [cli]",
-		Short:  "(deprecated) Use `usp setup` instead",
-		Hidden: true,
-		Args:   cobra.MaximumNArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
-			slog.Warn("install is deprecated; use `setup` instead")
-			if err := runSetup(args); err != nil {
-				return err
-			}
-			emitHint("install")
-			return nil
-		},
-	}
-}
-
-// runSetup is the shared body for install/setup commands.
 func runSetup(args []string) error {
 	target := ""
 	if len(args) > 0 {
@@ -87,12 +67,12 @@ func runSetup(args []string) error {
 	}
 	defer idx.Close()
 
-	rows := make([]installRow, 0, len(names))
+	rows := make([]setupRow, 0, len(names))
 
 	for _, name := range names {
 		res, dErr := uxp.Detect(name, reg, nil)
 		if dErr != nil {
-			rows = append(rows, installRow{
+			rows = append(rows, setupRow{
 				CLI:    string(name),
 				Status: statusSym[uxp.StatusFail],
 				Error:  dErr.Error(),
@@ -100,7 +80,7 @@ func runSetup(args []string) error {
 			continue
 		}
 		if !res.Installed {
-			rows = append(rows, installRow{
+			rows = append(rows, setupRow{
 				CLI:    string(name),
 				Status: statusSym[uxp.StatusFail],
 				Error:  "not found",
@@ -121,7 +101,7 @@ func runSetup(args []string) error {
 		if count == 0 {
 			suffix = "0 (no transcripts)"
 		}
-		rows = append(rows, installRow{
+		rows = append(rows, setupRow{
 			CLI:      string(name),
 			Version:  "v" + ver,
 			Status:   statusSym[uxp.StatusOK],

@@ -15,7 +15,7 @@ func TestHintsRegistered(t *testing.T) {
 
 	registerHints(root)
 
-	for _, want := range []string{"setup", "install", "doctor", "resume", "list"} {
+	for _, want := range []string{"setup", "doctor", "resume", "list"} {
 		hints := root.Hints.Lookup(want)
 		if len(hints) == 0 {
 			t.Errorf("no hints registered for %q", want)

@@ -76,17 +76,10 @@ func TestArgsResumeFlags(t *testing.T) {
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
 
-	for _, name := range []string{"session", "tool"} {
-		if cmd.Flags().Lookup(name) == nil {
-			t.Errorf("missing flag %q", name)
-		}
-	}
-	// --session must be hidden (deprecated alias).
-	if f := cmd.Flags().Lookup("session"); f != nil && !f.Hidden {
-		t.Error("--session flag should be hidden (deprecated)")
+	if cmd.Flags().Lookup("tool") == nil {
+		t.Error("missing --tool flag")
 	}
 
-	// Positional id (non-existent): lookup runs first, error from session.
 	cmd.SetArgs([]string{"fake-session-id"})
 	err := cmd.Execute()
 	if err == nil {
@@ -94,37 +87,6 @@ func TestArgsResumeFlags(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("expected 'not found' error, got: %v", err)
-	}
-}
-
-func TestArgsResumeSessionFlagStillWorks(t *testing.T) {
-	cmd := resumeCmd()
-	cmd.SilenceUsage = true
-	cmd.SilenceErrors = true
-
-	// --session alias still wires through.
-	cmd.SetArgs([]string{"--session", "fake-session-id"})
-	err := cmd.Execute()
-	if err == nil {
-		t.Fatal("expected error with fake session via --session alias")
-	}
-	if !strings.Contains(err.Error(), "not found") {
-		t.Errorf("expected 'not found' error, got: %v", err)
-	}
-}
-
-func TestArgsResumeRejectsBothPositionalAndSessionFlag(t *testing.T) {
-	cmd := resumeCmd()
-	cmd.SilenceUsage = true
-	cmd.SilenceErrors = true
-
-	cmd.SetArgs([]string{"abc", "--session", "xyz"})
-	err := cmd.Execute()
-	if err == nil {
-		t.Fatal("expected error when both <id> and --session given")
-	}
-	if !strings.Contains(err.Error(), "use only one") {
-		t.Errorf("expected 'use only one' error, got: %v", err)
 	}
 }
 
@@ -171,21 +133,6 @@ func TestArgsSetupAcceptsZeroOrOneArg(t *testing.T) {
 	cmd.SetArgs([]string{"claude", "codex"})
 	if err := cmd.Execute(); err == nil {
 		t.Error("expected error with 2 args")
-	}
-}
-
-func TestArgsInstallStillWorksAsHiddenAlias(t *testing.T) {
-	cmd := installCmd()
-	if !cmd.Hidden {
-		t.Error("install command should be Hidden (deprecated alias)")
-	}
-	stubRunE(cmd)
-	cmd.SilenceUsage = true
-	cmd.SilenceErrors = true
-
-	cmd.SetArgs([]string{})
-	if err := cmd.Execute(); err != nil {
-		t.Errorf("install (hidden) 0 args should succeed: %v", err)
 	}
 }
 
@@ -236,14 +183,13 @@ func TestArgsCommandWiring(t *testing.T) {
 		resumeCmd(),
 		doctorCmd(),
 		setupCmd(),
-		installCmd(),
 	)
 
 	rootNames := map[string]bool{}
 	for _, c := range root.Cmd.Commands() {
 		rootNames[c.Name()] = true
 	}
-	for _, want := range []string{"session", "resume", "doctor", "setup", "install"} {
+	for _, want := range []string{"session", "resume", "doctor", "setup"} {
 		if !rootNames[want] {
 			t.Errorf("root missing subcommand %q", want)
 		}

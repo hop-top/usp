@@ -51,10 +51,6 @@ usp resume --tool <cli>              # continue most recent session in <cli>
 usp resume <id> --tool <cli>         # resume a specific source session
 ```
 
-`usp install` is a hidden deprecated alias for `usp setup`. `usp resume
---session <id>` is a hidden deprecated alias for the positional form.
-Both still work for one release; prefer the new spelling.
-
 Full per-command flag reference: [`docs/usp/api-cli.md`](docs/usp/api-cli.md).
 
 ## Environment variables
@@ -127,8 +123,7 @@ In all cases: prefer calling `usp` over reparsing yourself.
 - Engine: SQLite, with an FTS5 virtual table over session content for
   fast `usp session search`.
 - Built by `usp setup`. Re-run after a long pause to pick up new
-  sessions; the command is idempotent. `usp install` remains a hidden
-  deprecated alias.
+  sessions; the command is idempotent.
 
 ## Calling usp from an agent
 

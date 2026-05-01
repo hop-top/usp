@@ -85,16 +85,61 @@ func TestArgsResumeFlags(t *testing.T) {
 			t.Errorf("missing flag %q", name)
 		}
 	}
+	// --session must be hidden (deprecated alias).
+	if f := cmd.Flags().Lookup("session"); f != nil && !f.Hidden {
+		t.Error("--session flag should be hidden (deprecated)")
+	}
 
-	// With --session (non-existent) but no --tool: session lookup runs
-	// first, so error is about session, not --tool.
-	cmd.SetArgs([]string{"--session", "fake-session-id"})
+	// Positional id (non-existent): lookup runs first, error from session.
+	cmd.SetArgs([]string{"fake-session-id"})
 	err := cmd.Execute()
 	if err == nil {
-		t.Fatal("expected error with fake session")
+		t.Fatal("expected error with fake session id")
 	}
 	if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("expected 'not found' error, got: %v", err)
+	}
+}
+
+func TestArgsResumeSessionFlagStillWorks(t *testing.T) {
+	cmd := resumeCmd()
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+
+	// --session alias still wires through.
+	cmd.SetArgs([]string{"--session", "fake-session-id"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error with fake session via --session alias")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' error, got: %v", err)
+	}
+}
+
+func TestArgsResumeRejectsBothPositionalAndSessionFlag(t *testing.T) {
+	cmd := resumeCmd()
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+
+	cmd.SetArgs([]string{"abc", "--session", "xyz"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when both <id> and --session given")
+	}
+	if !strings.Contains(err.Error(), "use only one") {
+		t.Errorf("expected 'use only one' error, got: %v", err)
+	}
+}
+
+func TestArgsResumeRejectsTooManyArgs(t *testing.T) {
+	cmd := resumeCmd()
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+
+	cmd.SetArgs([]string{"a", "b"})
+	if err := cmd.Execute(); err == nil {
+		t.Error("expected error with 2 positional args")
 	}
 }
 

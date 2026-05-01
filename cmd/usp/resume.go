@@ -23,12 +23,26 @@ func resumeCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "resume",
+		Use:   "resume [<id>]",
 		Short: "Continue a conversation from one CLI in another",
-		RunE: func(_ *cobra.Command, _ []string) error {
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
 				return fmt.Errorf("getwd: %w", err)
+			}
+
+			// Resolve source session id: positional wins; --session is
+			// a deprecated alias kept for one release.
+			id := ""
+			switch {
+			case len(args) == 1 && sessionFlag != "":
+				return fmt.Errorf("use only one of <id> or --session")
+			case len(args) == 1:
+				id = args[0]
+			case sessionFlag != "":
+				slog.Warn("--session is deprecated; pass <id> as a positional arg")
+				id = sessionFlag
 			}
 
 			adapters := allAdapters()
@@ -39,14 +53,14 @@ func resumeCmd() *cobra.Command {
 				sourceCLI string
 			)
 
-			if sessionFlag != "" {
+			if id != "" {
 				// Look up by ID across adapters.
-				for _, name := range adapterOrder(sessionFlag) {
+				for _, name := range adapterOrder(id) {
 					a, ok := adapters[name]
 					if !ok {
 						continue
 					}
-					s, err := a.GetSession(sessionFlag)
+					s, err := a.GetSession(id)
 					if err != nil || s == nil {
 						continue
 					}
@@ -55,7 +69,7 @@ func resumeCmd() *cobra.Command {
 					break
 				}
 				if sess == nil {
-					return fmt.Errorf("session %q not found", sessionFlag)
+					return fmt.Errorf("session %q not found", id)
 				}
 			} else {
 				// Find most recent session for cwd.
@@ -150,7 +164,8 @@ func resumeCmd() *cobra.Command {
 	cmd.Flags().StringVar(&toolFlag, "tool", "",
 		"Target CLI to resume in (claude, codex, gemini, opencode)")
 	cmd.Flags().StringVar(&sessionFlag, "session", "",
-		"Source session ID (default: most recent for cwd)")
+		"Source session ID (deprecated: pass <id> as positional arg)")
+	_ = cmd.Flags().MarkHidden("session")
 	return cmd
 }
 

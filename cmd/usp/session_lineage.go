@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"hop.top/usp/internal/sessionutil"
@@ -19,11 +19,10 @@ func sessionLineageCmd() *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			id := args[0]
 
-			home, err := os.UserHomeDir()
+			dbPath, err := lineageDBPath()
 			if err != nil {
-				return fmt.Errorf("home dir: %w", err)
+				return fmt.Errorf("lineage path: %w", err)
 			}
-			dbPath := filepath.Join(home, ".local", "state", "usp", "sessions.db")
 
 			store, err := lineage.Open(dbPath)
 			if err != nil {
@@ -48,6 +47,9 @@ func tryNativeLineage(id string) error {
 	s, _, _, err := sessionutil.ResolveSessionID(
 		id, adapters, adapterOrder(id))
 	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return exitNotFound(err)
+		}
 		return err
 	}
 	s.Segments = []session.Segment{{

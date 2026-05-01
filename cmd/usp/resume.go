@@ -3,12 +3,14 @@ package main
 import (
 	"crypto/rand"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"hop.top/kit/xdg"
 	"hop.top/usp/internal/sessionutil"
 	"hop.top/usp/lineage"
 	"hop.top/usp/session"
@@ -21,12 +23,26 @@ func resumeCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "resume",
+		Use:   "resume [<id>]",
 		Short: "Continue a conversation from one CLI in another",
-		RunE: func(_ *cobra.Command, _ []string) error {
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
 				return fmt.Errorf("getwd: %w", err)
+			}
+
+			// Resolve source session id: positional wins; --session is
+			// a deprecated alias kept for one release.
+			id := ""
+			switch {
+			case len(args) == 1 && sessionFlag != "":
+				return fmt.Errorf("use only one of <id> or --session")
+			case len(args) == 1:
+				id = args[0]
+			case sessionFlag != "":
+				slog.Warn("--session is deprecated; pass <id> as a positional arg")
+				id = sessionFlag
 			}
 
 			adapters := allAdapters()
@@ -37,14 +53,14 @@ func resumeCmd() *cobra.Command {
 				sourceCLI string
 			)
 
-			if sessionFlag != "" {
+			if id != "" {
 				// Look up by ID across adapters.
-				for _, name := range adapterOrder(sessionFlag) {
+				for _, name := range adapterOrder(id) {
 					a, ok := adapters[name]
 					if !ok {
 						continue
 					}
-					s, err := a.GetSession(sessionFlag)
+					s, err := a.GetSession(id)
 					if err != nil || s == nil {
 						continue
 					}
@@ -53,7 +69,7 @@ func resumeCmd() *cobra.Command {
 					break
 				}
 				if sess == nil {
-					return fmt.Errorf("session %q not found", sessionFlag)
+					return fmt.Errorf("session %q not found", id)
 				}
 			} else {
 				// Find most recent session for cwd.
@@ -103,13 +119,14 @@ func resumeCmd() *cobra.Command {
 			}
 
 			// Record lineage.
-			home, err := os.UserHomeDir()
+			stateDir, err := xdg.StateDir("usp")
 			if err != nil {
-				return fmt.Errorf("home dir: %w", err)
+				return fmt.Errorf("state dir: %w", err)
 			}
-			dbPath := filepath.Join(
-				home, ".local", "state", "usp", "sessions.db",
-			)
+			if err := os.MkdirAll(stateDir, 0o750); err != nil {
+				return fmt.Errorf("create state dir: %w", err)
+			}
+			dbPath := filepath.Join(stateDir, "sessions.db")
 			store, err := lineage.Open(dbPath)
 			if err != nil {
 				return fmt.Errorf("lineage store: %w", err)
@@ -131,9 +148,10 @@ func resumeCmd() *cobra.Command {
 				return fmt.Errorf("add target segment: %w", err)
 			}
 
-			fmt.Fprintf(os.Stderr,
-				"Resuming in %s (session %s)...\n", toolFlag, nativeID,
-			)
+			slog.Info("resuming session",
+				"target", toolFlag, "session", nativeID)
+			resumeLastUSPID = uspID
+			emitHint("resume")
 
 			// Hand off to target CLI.
 			argv := target.ResumeCmd(nativeID)
@@ -148,7 +166,8 @@ func resumeCmd() *cobra.Command {
 	cmd.Flags().StringVar(&toolFlag, "tool", "",
 		"Target CLI to resume in (claude, codex, gemini, opencode)")
 	cmd.Flags().StringVar(&sessionFlag, "session", "",
-		"Source session ID (default: most recent for cwd)")
+		"Source session ID (deprecated: pass <id> as positional arg)")
+	_ = cmd.Flags().MarkHidden("session")
 	return cmd
 }
 

@@ -3,18 +3,28 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 
+	"hop.top/kit/output"
 	"hop.top/kit/uxp"
 )
 
-var statusSyms = [4]string{
-	"\033[32m✓\033[0m", // OK
-	"\033[33m⚠\033[0m", // Warn
-	"\033[31m✗\033[0m", // Fail
-	"\033[90m—\033[0m", // Skip
+// statusSym maps a uxp CheckStatus to a stable symbol. Plain glyphs;
+// fang/lipgloss colors at render time when format=table on a tty.
+var statusSym = map[uxp.CheckStatus]string{
+	uxp.StatusOK:   "✓",
+	uxp.StatusWarn: "⚠",
+	uxp.StatusFail: "✗",
+	uxp.StatusSkip: "—",
+}
+
+// doctorRow is the table-renderable projection of a uxp.Check.
+type doctorRow struct {
+	Name    string `table:"CHECK"   json:"name"             yaml:"name"`
+	Status  string `table:"STATUS"  json:"status"           yaml:"status"`
+	Message string `table:"MESSAGE" json:"message"          yaml:"message"`
+	Detail  string `table:"DETAIL"  json:"detail,omitempty" yaml:"detail,omitempty"`
 }
 
 func doctorCmd() *cobra.Command {
@@ -23,7 +33,7 @@ func doctorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "doctor",
 		Short: "Check environment health for supported CLIs",
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			reg := uxp.DefaultRegistry()
 			doc := uxp.NewDoctor()
 
@@ -36,28 +46,47 @@ func doctorCmd() *cobra.Command {
 			}
 
 			for _, name := range names {
-				// Built-in: binary installed?
 				doc.Add(uxp.CheckCLIInstalled(name, nil))
-
-				// Built-in: store exists?
 				doc.Add(uxp.CheckStoreExists(name, reg))
-
-				// USP-specific: store readable?
 				doc.Add(checkStoreReadable(name, reg))
 			}
-
-			// USP-specific: project index DB accessible.
 			doc.Add(checkProjectIndex())
 
 			results := doc.Run()
-			printTable(cmd, results)
-			return nil
+			return output.Render(os.Stdout, formatFromViper(), toDoctorRows(results))
 		},
 	}
 
 	cmd.Flags().StringVar(&cliFlag, "tool", "",
 		"Check a single CLI (e.g. claude, codex)")
 	return cmd
+}
+
+// formatFromViper reads the persistent --format global from the active
+// rootViper; defaults to table.
+func formatFromViper() output.Format {
+	f := rootViper.GetString("format")
+	if f == "" {
+		return output.Table
+	}
+	return f
+}
+
+func toDoctorRows(checks []uxp.Check) []doctorRow {
+	rows := make([]doctorRow, len(checks))
+	for i, c := range checks {
+		sym, ok := statusSym[c.Status]
+		if !ok {
+			sym = "?"
+		}
+		rows[i] = doctorRow{
+			Name:    string(c.Name),
+			Status:  sym,
+			Message: c.Message,
+			Detail:  c.Detail,
+		}
+	}
+	return rows
 }
 
 // checkStoreReadable returns a CheckFunc that verifies the store dir
@@ -84,7 +113,7 @@ func checkStoreReadable(cli uxp.CLIName, reg *uxp.CLIRegistry) uxp.CheckFunc {
 			return uxp.Check{
 				Name: label, Status: uxp.StatusFail,
 				Message: "store not readable",
-				Detail: err.Error(),
+				Detail:  err.Error(),
 			}
 		}
 		_ = f.Close()
@@ -92,7 +121,7 @@ func checkStoreReadable(cli uxp.CLIName, reg *uxp.CLIRegistry) uxp.CheckFunc {
 		return uxp.Check{
 			Name: label, Status: uxp.StatusOK,
 			Message: "store readable",
-			Detail: p,
+			Detail:  p,
 		}
 	}
 }
@@ -117,13 +146,13 @@ func checkProjectIndex() uxp.CheckFunc {
 				return uxp.Check{
 					Name: label, Status: uxp.StatusWarn,
 					Message: "index DB not found (run usp scan first?)",
-					Detail: p,
+					Detail:  p,
 				}
 			}
 			return uxp.Check{
 				Name: label, Status: uxp.StatusFail,
 				Message: "index DB inaccessible",
-				Detail: err.Error(),
+				Detail:  err.Error(),
 			}
 		}
 
@@ -131,50 +160,14 @@ func checkProjectIndex() uxp.CheckFunc {
 			return uxp.Check{
 				Name: label, Status: uxp.StatusFail,
 				Message: "index path is a directory, expected file",
-				Detail: p,
+				Detail:  p,
 			}
 		}
 
 		return uxp.Check{
 			Name: label, Status: uxp.StatusOK,
 			Message: "index DB exists",
-			Detail: p,
+			Detail:  p,
 		}
-	}
-}
-
-// printTable renders doctor results as an aligned table.
-func printTable(cmd *cobra.Command, checks []uxp.Check) {
-	if len(checks) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), "No checks configured.")
-		return
-	}
-
-	// Compute column widths.
-	nameW, msgW := 5, 7 // min: "Check", "Message"
-	for _, c := range checks {
-		if len(c.Name) > nameW {
-			nameW = len(c.Name)
-		}
-		if len(c.Message) > msgW {
-			msgW = len(c.Message)
-		}
-	}
-
-	w := cmd.OutOrStdout()
-
-	// Header.
-	fmt.Fprintf(w, "  %-*s  %s  %-*s\n",
-		nameW, "Check", "Status", msgW, "Message")
-	fmt.Fprintf(w, "  %s  %s  %s\n",
-		strings.Repeat("─", nameW),
-		strings.Repeat("─", 6),
-		strings.Repeat("─", msgW))
-
-	for _, c := range checks {
-		fmt.Fprintf(w, "  %-*s  %-9s %-*s\n",
-			nameW, c.Name,
-			statusSyms[c.Status],
-			msgW, c.Message)
 	}
 }

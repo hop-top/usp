@@ -5,11 +5,17 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/spf13/viper"
 	"hop.top/kit/cli"
 	"hop.top/usp/internal/xrrutil"
 )
 
 var version = "dev"
+
+// rootViper is the active viper instance bound by cli.New. Subcommand
+// RunE bodies read globals (format, quiet, no-color, no-hints) from
+// here. Set in main; defaults to viper.New() for unit tests.
+var rootViper = viper.New()
 
 func main() {
 	root := cli.New(cli.Config{
@@ -18,6 +24,7 @@ func main() {
 		Short:   "Universal Sessions Protocol — cross-CLI session management",
 		Accent:  "#7C5CFF",
 	})
+	rootViper = root.Viper
 
 	if xrrutil.Active() {
 		fmt.Fprintf(root.Cmd.ErrOrStderr(),

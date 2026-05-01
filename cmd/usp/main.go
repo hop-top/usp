@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/spf13/viper"
+	kitlog "hop.top/kit/log"
 	"hop.top/kit/cli"
 	"hop.top/usp/internal/xrrutil"
 )
@@ -25,6 +27,10 @@ func main() {
 		Accent:  "#7C5CFF",
 	})
 	rootViper = root.Viper
+
+	// Default slog handler: charm log via kit/log (stderr, viper-aware
+	// "quiet"/"no-color"). Logger implements slog.Handler.
+	slog.SetDefault(slog.New(kitlog.New(root.Viper)))
 
 	if xrrutil.Active() {
 		fmt.Fprintf(root.Cmd.ErrOrStderr(),

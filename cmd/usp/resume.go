@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -133,9 +134,8 @@ func resumeCmd() *cobra.Command {
 				return fmt.Errorf("add target segment: %w", err)
 			}
 
-			fmt.Fprintf(os.Stderr,
-				"Resuming in %s (session %s)...\n", toolFlag, nativeID,
-			)
+			slog.Info("resuming session",
+				"target", toolFlag, "session", nativeID)
 
 			// Hand off to target CLI.
 			argv := target.ResumeCmd(nativeID)

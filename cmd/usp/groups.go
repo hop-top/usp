@@ -1,6 +1,9 @@
 package main
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/spf13/cobra"
+	"hop.top/kit/go/console/cli"
+)
 
 // commandGroups maps subcommand names to a group id. New commands
 // should be registered here, not via per-cmd GroupID literals.
@@ -12,15 +15,14 @@ var commandGroups = map[string]string{
 	"version": "management",
 }
 
-// rootGroups returns the cobra group definitions in display order.
-// kit/cli v0.3.2-patch.3 has no Help/Groups field on Config; groups
-// are wired via cobra.Command.AddGroup directly.
-func rootGroups() []*cobra.Group {
-	return []*cobra.Group{
+// rootGroups returns the custom group definitions in display order.
+// kit/cli auto-registers MANAGEMENT (hidden); listing it again would
+// duplicate it in --help-all output.
+func rootGroups() []cli.GroupConfig {
+	return []cli.GroupConfig{
 		{ID: "knowledge", Title: "KNOWLEDGE"},
 		{ID: "lifecycle", Title: "LIFECYCLE"},
 		{ID: "organize", Title: "ORGANIZE"},
-		{ID: "management", Title: "MANAGEMENT"},
 	}
 }
 

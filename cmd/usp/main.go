@@ -45,6 +45,7 @@ func main() {
 		Version: version,
 		Short:   "Universal Sessions Protocol — cross-CLI session management",
 		Accent:  "#7C5CFF",
+		Help:    cli.HelpConfig{Groups: rootGroups()},
 		Hooks: cli.Hooks{
 			// -V/--verbose count → slog level (Info → Debug → Trace).
 			// Re-init after flag parse; kit fills VerboseCount via OnInitialize.
@@ -69,10 +70,6 @@ func main() {
 		fmt.Fprintf(root.Cmd.ErrOrStderr(),
 			"xrr: mode=%s cassette_dir=%s\n",
 			xrrutil.Mode(), xrrutil.CassetteDir())
-	}
-
-	for _, g := range rootGroups() {
-		root.Cmd.AddGroup(g)
 	}
 
 	root.Cmd.AddCommand(

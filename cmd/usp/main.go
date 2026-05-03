@@ -78,6 +78,7 @@ func main() {
 		doctorCmd(),
 		setupCmd(),
 		versionCmd(),
+		configCmd(root.Viper),
 	)
 	applyCommandGroups(root.Cmd)
 	registerHints(root)

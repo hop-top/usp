@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	kitcliconfig "hop.top/kit/go/console/cli/config"
 	kitconfig "hop.top/kit/go/core/config"
 	"hop.top/kit/go/core/xdg"
 )
@@ -107,4 +108,75 @@ func mergeConfig(dst, src *Config) {
 	if src.DefaultLimit != 0 {
 		dst.DefaultLimit = src.DefaultLimit
 	}
+}
+
+// configCmd returns the `config` parent under MANAGEMENT. Hosts kit's
+// shared `path` and `paths` introspection subcommands so usp matches
+// `git config --list --show-origin`-style discovery.
+func configCmd(_ *viper.Viper) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "config",
+		Short: "Inspect usp configuration",
+		Args:  cobra.NoArgs,
+	}
+	kitcliconfig.RegisterPathSubcommands(cmd, "usp",
+		kitcliconfig.WithResolver(uspConfigPathsResolver))
+	return cmd
+}
+
+// uspConfigPathsResolver mirrors loadConfig's precedence chain (project
+// → user → system → defaults) for the kit-shared `config paths` cmd.
+// Highest precedence first.
+func uspConfigPathsResolver(cwd string) []kitcliconfig.ResolvedPath {
+	abs, err := filepath.Abs(cwd)
+	if err != nil {
+		abs = cwd
+	}
+	out := make([]kitcliconfig.ResolvedPath, 0, 4)
+
+	projectPath := filepath.Join(abs, ".usp.yaml")
+	out = append(out, kitcliconfig.ResolvedPath{
+		Path:   projectPath,
+		Source: "project",
+		Scope:  "project",
+		Exists: regularFileExists(projectPath),
+	})
+
+	if dir, err := xdg.ConfigDir("usp"); err == nil {
+		userPath := filepath.Join(dir, "config.yaml")
+		out = append(out, kitcliconfig.ResolvedPath{
+			Path:   userPath,
+			Source: "user",
+			Scope:  "user",
+			Exists: regularFileExists(userPath),
+		})
+	}
+
+	const sysPath = "/etc/usp/config.yaml"
+	out = append(out, kitcliconfig.ResolvedPath{
+		Path:   sysPath,
+		Source: "system",
+		Scope:  "system",
+		Exists: regularFileExists(sysPath),
+	})
+
+	out = append(out, kitcliconfig.ResolvedPath{
+		Path:   "<defaults>",
+		Source: "default",
+		Scope:  "default",
+		Exists: true,
+	})
+	return out
+}
+
+// regularFileExists reports whether path resolves to a regular file.
+func regularFileExists(path string) bool {
+	if path == "" {
+		return false
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info.Mode().IsRegular()
 }

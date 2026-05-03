@@ -13,6 +13,7 @@ var commandGroups = map[string]string{
 	"doctor":  "organize",
 	"setup":   "organize",
 	"version": "management",
+	"config":  "management",
 }
 
 // rootGroups returns the custom group definitions in display order.

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"hop.top/kit/go/console/cli"
 	kitlog "hop.top/kit/go/console/log"
@@ -38,16 +39,25 @@ var version = "dev"
 var rootViper = viper.New()
 
 func main() {
-	root := cli.New(cli.Config{
+	var root *cli.Root
+	root = cli.New(cli.Config{
 		Name:    "usp",
 		Version: version,
 		Short:   "Universal Sessions Protocol — cross-CLI session management",
 		Accent:  "#7C5CFF",
+		Hooks: cli.Hooks{
+			// -V/--verbose count → slog level (Info → Debug → Trace).
+			// Re-init after flag parse; kit fills VerboseCount via OnInitialize.
+			PrePersistentRunE: func(_ *cobra.Command, _ []string) error {
+				slog.SetDefault(slog.New(
+					kitlog.WithVerbose(root.Viper, root.VerboseCount())))
+				return nil
+			},
+		},
 	})
 	rootViper = root.Viper
 
-	// Default slog handler: charm log via kit/log (stderr, viper-aware
-	// "quiet"/"no-color"). Logger implements slog.Handler.
+	// Pre-parse default at Info level. Replaced by hook after parse.
 	slog.SetDefault(slog.New(kitlog.New(root.Viper)))
 
 	registerConfigGlobals(root.Cmd, root.Viper)

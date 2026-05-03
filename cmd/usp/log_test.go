@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	charmlog "charm.land/log/v2"
 	"github.com/spf13/viper"
 	kitlog "hop.top/kit/go/console/log"
 )
@@ -34,5 +35,28 @@ func TestSlogInfoFormat(t *testing.T) {
 	l.Info("hello", "k", "v")
 	if !strings.Contains(buf.String(), "msg=hello") {
 		t.Errorf("slog output missing msg=hello: %q", buf.String())
+	}
+}
+
+// TestVerboseCount maps the -V count to charm log levels per spec §5.
+// 0=Info default, 1=Debug, 2+=Trace. Mirrors kit/log's contract so the
+// -V wiring in main.go's PrePersistentRunE hook remains spec-aligned.
+func TestVerboseCount(t *testing.T) {
+	cases := []struct {
+		count int
+		want  charmlog.Level
+	}{
+		{0, charmlog.InfoLevel},
+		{1, charmlog.DebugLevel},
+		{2, kitlog.TraceLevel},
+		{3, kitlog.TraceLevel},
+	}
+	for _, c := range cases {
+		v := viper.New()
+		l := kitlog.WithVerbose(v, c.count)
+		if l.GetLevel() != c.want {
+			t.Errorf("count=%d level=%v want=%v",
+				c.count, l.GetLevel(), c.want)
+		}
 	}
 }

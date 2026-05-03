@@ -21,6 +21,24 @@ Every command accepts these:
 | `-h`, `--help` | — | Show command help. |
 | `-v`, `--version` | — | Show binary version (root only). |
 
+### Globals intentionally absent
+
+The CLI conventions spec §5 lists `--profile` and `--instance` as
+optional globals for tools that manage multiple user/team profiles or
+target multiple backends. `usp` exposes neither, by design:
+
+- **`--profile`** — `usp` is single-tenant. Index, lineage DB, and
+  config all live under the invoking user's XDG paths
+  (`$XDG_DATA_HOME/usp/`, `$XDG_STATE_HOME/usp/`,
+  `$XDG_CONFIG_HOME/usp/`). There is no concept of switching between
+  named profiles. Run as a different OS user (or override `XDG_*`)
+  for an isolated environment.
+- **`--instance`** — `usp` is local-only. There is no remote backend
+  to point at; every read goes through the on-disk index and every
+  write touches the on-disk lineage DB. Adding `--instance` would
+  clutter help with no behaviour to bind it to. Re-evaluate when (if)
+  a remote sync surface lands. Tracked in T-0103 as wontfix-with-rationale.
+
 ## Exit codes
 
 | Code | Meaning |

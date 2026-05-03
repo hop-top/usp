@@ -150,6 +150,14 @@ A few rules of thumb:
 5. **Exit codes** (per cli-conventions §8.1): `0` ok, `1` generic
    error, `2` usage, `3` not found (e.g. `session show <missing-id>`).
    Codes `4` (exists) / `5` (unauthorized) reserved.
+6. **No `--profile` / `--instance`.** Spec §5 lists these as optional
+   globals for multi-tenant or multi-backend tools. `usp` is
+   single-tenant + local-only — index, lineage DB, and config all
+   live under the invoking user's XDG paths, and there is no remote
+   backend. Use a separate OS user (or `XDG_*` overrides) for an
+   isolated environment. Documented in
+   [`docs/usp/api-cli.md`](docs/usp/api-cli.md) §"Globals intentionally
+   absent".
 
 ## Pre-merge gate
 

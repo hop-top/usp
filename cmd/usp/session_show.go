@@ -5,6 +5,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"hop.top/kit/go/console/output"
@@ -110,6 +111,9 @@ func sessionShowCmd() *cobra.Command {
 				}
 				return err
 			}
+
+			fmt := formatFromViper()
+
 			// Adapter file/db lookups need the native id.
 			ch, err := a.StreamTurns(sess.NativeID)
 			var turns []showTurn
@@ -118,7 +122,7 @@ func sessionShowCmd() *cobra.Command {
 					turns = append(turns, showTurn{
 						Role:      string(turn.Role),
 						Content:   turn.Content,
-						Timestamp: turn.Timestamp.Format("2006-01-02 15:04:05"),
+						Timestamp: timestampForFormat(turn.Timestamp, fmt),
 						ToolCalls: turn.ToolCalls,
 					})
 				}
@@ -126,7 +130,7 @@ func sessionShowCmd() *cobra.Command {
 
 			ended := "active"
 			if sess.EndedAt != nil {
-				ended = sess.EndedAt.Format("2006-01-02 15:04:05")
+				ended = timestampForFormat(*sess.EndedAt, fmt)
 			}
 
 			var skills []session.SkillEvent
@@ -150,14 +154,13 @@ func sessionShowCmd() *cobra.Command {
 				NativeID:  sess.NativeID,
 				CLI:       matchedCLI,
 				Project:   sess.ProjectCwd,
-				StartedAt: sess.StartedAt.Format("2006-01-02 15:04:05"),
+				StartedAt: timestampForFormat(sess.StartedAt, fmt),
 				EndedAt:   ended,
 				TurnCount: sess.TurnCount,
 				Turns:     turns,
 				Skills:    skills,
 			}
 
-			fmt := formatFromViper()
 			if err := output.Render(os.Stdout, fmt, res); err != nil {
 				return err
 			}
@@ -175,4 +178,16 @@ func sessionShowCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&showSkills, "skills", false,
 		"Embed skill invocations alongside the session detail")
 	return cmd
+}
+
+// timestampForFormat renders t per spec §8.3: human-friendly for tables,
+// RFC3339 (ISO 8601 + tz) for JSON/YAML/etc.
+func timestampForFormat(t time.Time, format output.Format) string {
+	if t.IsZero() {
+		return ""
+	}
+	if format == output.Table {
+		return t.Format("2006-01-02 15:04:05")
+	}
+	return t.UTC().Format(time.RFC3339)
 }

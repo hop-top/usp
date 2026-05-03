@@ -73,7 +73,7 @@ func sessionListCmd() *cobra.Command {
 				return nil
 			}
 			listEmptyResult = false
-			return output.Render(os.Stdout, format, toRows(all))
+			return output.Render(os.Stdout, format, toRows(all, format))
 		},
 	}
 
@@ -159,7 +159,7 @@ func sessionSearchCmd() *cobra.Command {
 				return nil
 			}
 
-			return output.Render(os.Stdout, format, toRows(matched))
+			return output.Render(os.Stdout, format, toRows(matched, format))
 		},
 	}
 
@@ -176,16 +176,22 @@ func sessionSearchCmd() *cobra.Command {
 
 // --- display helpers (not shared — UI-specific) ---
 
-func toRows(ss []session.Session) []sessionRow {
+// toRows projects sessions for output. Table render gets human-friendly
+// "5m ago"; JSON/YAML gets RFC3339 (spec §8.3 — machine output is ISO 8601).
+func toRows(ss []session.Session, format output.Format) []sessionRow {
 	rows := make([]sessionRow, len(ss))
 	for i, s := range ss {
+		started := s.StartedAt.UTC().Format(time.RFC3339)
+		if format == output.Table {
+			started = relativeTime(s.StartedAt)
+		}
 		rows[i] = sessionRow{
 			ID:       truncateID(s.ID, 16),
 			FullID:   s.ID,
 			NativeID: s.NativeID,
 			CLI:      string(s.CLI),
 			Project:  s.ProjectCwd,
-			Started:  relativeTime(s.StartedAt),
+			Started:  started,
 			Turns:    s.TurnCount,
 		}
 	}

@@ -70,6 +70,8 @@ usp [command] [--flags]
 | LIFECYCLE | [`resume`](#usp-resume) | Continue a conversation from one CLI in another. |
 | ORGANIZE | [`doctor`](#usp-doctor) | Health-check the environment for supported CLIs. |
 | ORGANIZE | [`setup`](#usp-setup) | Detect CLIs and (re)build the index. |
+| MANAGEMENT | [`alias`](#usp-alias) | Manage user-defined command aliases (hidden from default help; see `--help-all`). |
+| MANAGEMENT | `config` / `version` / `upgrade` | Standard kit-managed surface (`--help-all`). |
 
 **Examples**
 
@@ -352,6 +354,47 @@ usp session lineage a1b2c3d4-... --format json
 ```
 
 **Cross-refs** — [`usp resume`](#usp-resume) (creates lineage rows).
+
+---
+
+## `usp alias`
+
+**Purpose** — Manage user-defined command aliases. Backed by
+`kit/console/alias` (YAML store at
+`$XDG_CONFIG_HOME/usp/aliases.yaml`). Aliases are loaded at startup
+and registered as runtime command shims, so `usp <alias>` dispatches
+to the target subcommand exactly as if you had typed it out.
+
+**Synopsis**
+
+```sh
+usp alias [command] [--flags]
+```
+
+**Sub-commands**
+
+| Command | Purpose |
+|---|---|
+| `list` | Print the active alias table (default when no sub-command). |
+| `add <name> <target...>` | Add or update an alias. |
+| `remove <name>` | Remove an alias. Aliased to `rm`. |
+
+**Examples**
+
+```sh
+usp alias add ll "session list"        # `usp ll` → `usp session list`
+usp alias add slj "session list --format json"
+usp alias list
+usp alias remove ll
+```
+
+**Storage** — `$XDG_CONFIG_HOME/usp/aliases.yaml` (single file, single
+scope). usp is single-tenant local-only; there is no project-scoped
+overlay (cf. `tlc` which has both global and per-project alias
+files).
+
+**Cross-refs** — [Globals intentionally absent](#globals-intentionally-absent)
+(why no per-profile alias scope).
 
 ---
 

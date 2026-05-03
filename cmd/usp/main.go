@@ -81,6 +81,19 @@ func main() {
 		configCmd(root.Viper),
 		upgradeCmd(),
 	)
+
+	// Aliases: register the management subcommand + load stored
+	// entries as runtime shims. Failures are logged and ignored so a
+	// corrupt aliases.yaml never blocks the rest of the CLI.
+	if store, err := loadAliasStore(); err == nil {
+		root.Cmd.AddCommand(aliasCmd(root, store))
+		if err := root.LoadAliasStore(store); err != nil {
+			fmt.Fprintf(root.Cmd.ErrOrStderr(), "alias: %v\n", err)
+		}
+	} else {
+		fmt.Fprintf(root.Cmd.ErrOrStderr(), "alias: %v\n", err)
+	}
+
 	applyCommandGroups(root.Cmd)
 	registerHints(root)
 

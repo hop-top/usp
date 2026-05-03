@@ -15,6 +15,7 @@ var commandGroups = map[string]string{
 	"version": "management",
 	"config":  "management",
 	"upgrade": "management",
+	"alias":   "management",
 }
 
 // rootGroups returns the custom group definitions in display order.

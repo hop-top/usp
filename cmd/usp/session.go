@@ -1,7 +1,7 @@
 package main
 
 import (
-	"hop.top/kit/cli"
+	"hop.top/kit/go/console/cli"
 
 	"github.com/spf13/cobra"
 )

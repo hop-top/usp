@@ -3,8 +3,8 @@ package main
 import (
 	"testing"
 
-	"hop.top/kit/cli"
-	"hop.top/kit/output"
+	"hop.top/kit/go/console/cli"
+	"hop.top/kit/go/console/output"
 )
 
 func TestHintsRegistered(t *testing.T) {

@@ -16,7 +16,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"hop.top/kit/cli"
+	"hop.top/kit/go/console/cli"
 )
 
 var version = "dev"

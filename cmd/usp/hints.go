@@ -4,8 +4,8 @@ import (
 	"image/color"
 	"os"
 
-	"hop.top/kit/cli"
-	"hop.top/kit/output"
+	"hop.top/kit/go/console/cli"
+	"hop.top/kit/go/console/output"
 )
 
 // hintMuted is the color used for next-step hints. Plain gray to match

@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"hop.top/kit/cli"
+	"hop.top/kit/go/console/cli"
 )
 
 func TestRootGroupsRegistered(t *testing.T) {

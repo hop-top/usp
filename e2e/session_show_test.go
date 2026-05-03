@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"hop.top/kit/uxp"
+	"hop.top/kit/go/core/uxp"
 	"hop.top/usp/adapters/claude"
 	"hop.top/usp/adapters/codex"
 	"hop.top/usp/internal/sessionutil"

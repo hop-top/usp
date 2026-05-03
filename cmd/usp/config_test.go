@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/spf13/viper"
-	kitconfig "hop.top/kit/config"
+	kitconfig "hop.top/kit/go/core/config"
 )
 
 func TestDefaultConfig(t *testing.T) {

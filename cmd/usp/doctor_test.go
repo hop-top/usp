@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"hop.top/kit/uxp"
+	"hop.top/kit/go/core/uxp"
 )
 
 func TestDoctorRowsRender(t *testing.T) {

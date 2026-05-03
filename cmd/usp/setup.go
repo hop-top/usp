@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"hop.top/kit/output"
-	"hop.top/kit/uxp"
+	"hop.top/kit/go/console/output"
+	"hop.top/kit/go/core/uxp"
 	"hop.top/usp/index"
 )
 

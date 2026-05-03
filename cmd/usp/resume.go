@@ -10,7 +10,7 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
-	"hop.top/kit/xdg"
+	"hop.top/kit/go/core/xdg"
 	"hop.top/usp/internal/sessionutil"
 	"hop.top/usp/lineage"
 	"hop.top/usp/session"

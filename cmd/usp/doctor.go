@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"hop.top/kit/output"
-	"hop.top/kit/uxp"
+	"hop.top/kit/go/console/output"
+	"hop.top/kit/go/core/uxp"
 )
 
 // statusSym maps a uxp CheckStatus to a stable symbol. Plain glyphs;

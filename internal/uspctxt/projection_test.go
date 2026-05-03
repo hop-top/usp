@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"hop.top/kit/uxp"
+	"hop.top/kit/go/core/uxp"
 	"hop.top/usp/session"
 
 	// Register the claude mention extractor for fixtures using CLIClaude.

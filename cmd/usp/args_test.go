@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
-	"hop.top/kit/cli"
+	"hop.top/kit/go/console/cli"
 )
 
 // stubRunE replaces RunE with a no-op so tests exercise only flag/arg parsing.

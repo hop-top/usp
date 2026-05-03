@@ -8,8 +8,8 @@ import (
 	"os"
 
 	"github.com/spf13/viper"
-	"hop.top/kit/cli"
-	kitlog "hop.top/kit/log"
+	"hop.top/kit/go/console/cli"
+	kitlog "hop.top/kit/go/console/log"
 	"hop.top/usp/internal/xrrutil"
 )
 

@@ -9,8 +9,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	kitconfig "hop.top/kit/config"
-	"hop.top/kit/xdg"
+	kitconfig "hop.top/kit/go/core/config"
+	"hop.top/kit/go/core/xdg"
 )
 
 // Config is the persisted shape of usp's config file.

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"hop.top/kit/output"
+	"hop.top/kit/go/console/output"
 )
 
 func TestInstallRowsTableTags(t *testing.T) {

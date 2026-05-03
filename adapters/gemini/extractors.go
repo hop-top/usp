@@ -3,7 +3,7 @@ package gemini
 import (
 	"encoding/json"
 
-	"hop.top/kit/uxp"
+	"hop.top/kit/go/core/uxp"
 	"hop.top/usp/session"
 )
 

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"hop.top/kit/uxp"
+	"hop.top/kit/go/core/uxp"
 )
 
 // MentionExtractor returns canonical @file.<slug> mentions for a tool

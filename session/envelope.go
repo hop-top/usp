@@ -5,7 +5,7 @@ package session
 import (
 	"time"
 
-	"hop.top/kit/uxp"
+	"hop.top/kit/go/core/uxp"
 	"hop.top/usp/internal/id"
 )
 

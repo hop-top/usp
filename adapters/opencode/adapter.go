@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"hop.top/kit/uxp"
+	"hop.top/kit/go/core/uxp"
 	"hop.top/usp/session"
 
 	_ "modernc.org/sqlite"

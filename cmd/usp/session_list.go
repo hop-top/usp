@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"hop.top/kit/output"
+	"hop.top/kit/go/console/output"
 	"hop.top/usp/internal/sessionutil"
 	"hop.top/usp/session"
 )

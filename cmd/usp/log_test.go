@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/spf13/viper"
-	kitlog "hop.top/kit/log"
+	kitlog "hop.top/kit/go/console/log"
 )
 
 // TestSlogDefaultsToStderr verifies the kit/log handler writes to stderr

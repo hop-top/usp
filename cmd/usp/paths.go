@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"hop.top/kit/xdg"
+	"hop.top/kit/go/core/xdg"
 )
 
 // indexDBPath returns the canonical project index DB path under XDG data.

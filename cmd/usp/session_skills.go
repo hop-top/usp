@@ -37,7 +37,8 @@ const (
 func sessionSkillsCmd() *cobra.Command {
 	var (
 		sessionID string
-		cliFlag   string
+		toolFlag  string
+		cliFlag   string // hidden alias for --tool
 		project   string
 		name      string
 		since     string
@@ -54,7 +55,7 @@ calls. Each row carries the session, CLI, timestamp, skill name,
 the user turn that triggered it, a truncated trigger query, and
 the outcome (invoked / declined / errored).
 
-Filters AND-combine: --session, --cli, --project, --name,
+Filters AND-combine: --session, --tool, --project, --name,
 --since, --until.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			sinceT, err := sessionutil.ParseSince(since)
@@ -66,9 +67,14 @@ Filters AND-combine: --session, --cli, --project, --name,
 				return fmt.Errorf("invalid --until: %w", err)
 			}
 
-			adapters := sessionutil.FilterAdapters(allAdapters(), cliFlag)
+			// --tool wins; --cli kept as hidden alias for POC compat
+			tool := toolFlag
+			if tool == "" {
+				tool = cliFlag
+			}
+			adapters := sessionutil.FilterAdapters(allAdapters(), tool)
 			if adapters == nil {
-				return fmt.Errorf("unknown CLI %q", cliFlag)
+				return fmt.Errorf("unknown tool %q", tool)
 			}
 
 			events, err := collectSkillEvents(adapters, sessionID, project, sinceT, untilT)
@@ -101,8 +107,11 @@ Filters AND-combine: --session, --cli, --project, --name,
 
 	cmd.Flags().StringVar(&sessionID, "session", "",
 		"Restrict to a single session (full or prefix ID)")
+	cmd.Flags().StringVar(&toolFlag, "tool", "",
+		"Restrict to a specific tool (claude, codex, gemini, opencode)")
 	cmd.Flags().StringVar(&cliFlag, "cli", "",
-		"Restrict to a specific CLI (claude, codex, gemini, opencode)")
+		"Deprecated alias for --tool")
+	_ = cmd.Flags().MarkHidden("cli")
 	cmd.Flags().StringVar(&project, "project", "",
 		"Restrict to a project cwd")
 	cmd.Flags().StringVar(&name, "name", "",

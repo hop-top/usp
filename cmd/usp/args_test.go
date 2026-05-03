@@ -182,10 +182,14 @@ func TestArgsSessionSkillsFlags(t *testing.T) {
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
 
-	for _, name := range []string{"session", "cli", "project", "name", "since", "until"} {
+	for _, name := range []string{"session", "tool", "cli", "project", "name", "since", "until"} {
 		if cmd.Flags().Lookup(name) == nil {
 			t.Errorf("missing flag %q", name)
 		}
+	}
+	// --cli is the hidden POC-stage alias for --tool.
+	if cliFlag := cmd.Flags().Lookup("cli"); cliFlag != nil && !cliFlag.Hidden {
+		t.Error("--cli flag should be hidden (alias for --tool)")
 	}
 	// --format is inherited from the root persistent flag.
 

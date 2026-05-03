@@ -9,6 +9,7 @@ var commandGroups = map[string]string{
 	"resume":  "lifecycle",
 	"doctor":  "organize",
 	"setup":   "organize",
+	"version": "management",
 }
 
 // rootGroups returns the cobra group definitions in display order.

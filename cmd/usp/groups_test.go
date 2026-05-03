@@ -16,6 +16,7 @@ func TestRootGroupsRegistered(t *testing.T) {
 		resumeCmd(),
 		doctorCmd(),
 		setupCmd(),
+		versionCmd(),
 	)
 	applyCommandGroups(root.Cmd)
 
@@ -24,6 +25,7 @@ func TestRootGroupsRegistered(t *testing.T) {
 		"resume":  "lifecycle",
 		"doctor":  "organize",
 		"setup":   "organize",
+		"version": "management",
 	}
 	for _, c := range root.Cmd.Commands() {
 		if exp, ok := want[c.Name()]; ok {
@@ -45,6 +47,7 @@ func TestHelpDoesNotErrorWithGroups(t *testing.T) {
 		resumeCmd(),
 		doctorCmd(),
 		setupCmd(),
+		versionCmd(),
 	)
 	applyCommandGroups(root.Cmd)
 

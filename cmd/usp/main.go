@@ -70,6 +70,7 @@ func main() {
 		resumeCmd(),
 		doctorCmd(),
 		setupCmd(),
+		versionCmd(),
 	)
 	applyCommandGroups(root.Cmd)
 	registerHints(root)

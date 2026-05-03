@@ -79,6 +79,7 @@ func main() {
 		setupCmd(),
 		versionCmd(),
 		configCmd(root.Viper),
+		upgradeCmd(),
 	)
 	applyCommandGroups(root.Cmd)
 	registerHints(root)

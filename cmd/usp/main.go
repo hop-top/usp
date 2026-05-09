@@ -41,15 +41,25 @@ var rootViper = viper.New()
 func main() {
 	var root *cli.Root
 	root = cli.New(cli.Config{
-		Name:    "usp",
-		Version: version,
-		Short:   "Universal Sessions Protocol — cross-CLI session management",
-		Accent:  "#7C5CFF",
-		Help:    cli.HelpConfig{Groups: rootGroups()},
+		Name:          "usp",
+		Version:       version,
+		Short:         "Universal Sessions Protocol — cross-CLI session management",
+		Accent:        "#7C5CFF",
+		Help:          cli.HelpConfig{Groups: rootGroups()},
+		ProjectMarker: ".usp.yaml",
 		Hooks: cli.Hooks{
 			// -V/--verbose count → slog level (Info → Debug → Trace).
 			// Re-init after flag parse; kit fills VerboseCount via OnInitialize.
 			PrePersistentRunE: func(_ *cobra.Command, _ []string) error {
+				paths, overrides, err := root.ConfigArgs()
+				if err != nil {
+					return err
+				}
+				if _, err := loadConfigWithLayers(
+					root.Viper, paths, overrides,
+				); err != nil {
+					return fmt.Errorf("config: %w", err)
+				}
 				slog.SetDefault(slog.New(
 					kitlog.WithVerbose(root.Viper, root.VerboseCount())))
 				return nil
@@ -60,11 +70,6 @@ func main() {
 
 	// Pre-parse default at Info level. Replaced by hook after parse.
 	slog.SetDefault(slog.New(kitlog.New(root.Viper)))
-
-	registerConfigGlobals(root.Cmd, root.Viper)
-	if _, err := loadConfig(root.Viper); err != nil {
-		fmt.Fprintf(root.Cmd.ErrOrStderr(), "config: %v\n", err)
-	}
 
 	if xrrutil.Active() {
 		fmt.Fprintf(root.Cmd.ErrOrStderr(),

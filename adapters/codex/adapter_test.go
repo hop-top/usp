@@ -205,6 +205,82 @@ func TestListSessionsFallback(t *testing.T) {
 	}
 }
 
+func TestListSessionsFallbackWhenIndexHasNoMatchingFiles(t *testing.T) {
+	cwd := "/Users/test/myproject"
+	root := setupSessionTree(t, cwd)
+	codexDir := filepath.Dir(root)
+	indexPath := filepath.Join(codexDir, "session_index.jsonl")
+	writeJSONL(t, indexPath,
+		indexEntry{ID: "missing-session-id", ThreadName: "Stale", UpdatedAt: "2026-04-09T18:00:00Z"},
+	)
+
+	a := &Adapter{}
+
+	origSR := sessionsRootFn
+	sessionsRootFn = func() (string, error) { return root, nil }
+	defer func() { sessionsRootFn = origSR }()
+
+	origCR := codexRootFn
+	codexRootFn = func() (string, error) { return codexDir, nil }
+	defer func() { codexRootFn = origCR }()
+
+	sessions, err := a.ListSessions(cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session via stale-index fallback, got %d", len(sessions))
+	}
+	if sessions[0].NativeID != "019cb730-aaaa-7000-bbbb-ccccddddeeee" {
+		t.Fatalf("native_id = %q, want fallback walk session", sessions[0].NativeID)
+	}
+}
+
+func TestListSessionsMergesPartialIndexWithWalk(t *testing.T) {
+	cwd := "/Users/test/myproject"
+	root := setupSessionTree(t, cwd)
+	codexDir := filepath.Dir(root)
+	indexPath := filepath.Join(codexDir, "session_index.jsonl")
+	writeJSONL(t, indexPath,
+		indexEntry{
+			ID:         "019cb730-aaaa-7000-bbbb-ccccddddeeee",
+			ThreadName: "Indexed",
+			UpdatedAt:  "2026-04-09T18:00:00Z",
+		},
+	)
+
+	a := &Adapter{}
+
+	origSR := sessionsRootFn
+	sessionsRootFn = func() (string, error) { return root, nil }
+	defer func() { sessionsRootFn = origSR }()
+
+	origCR := codexRootFn
+	codexRootFn = func() (string, error) { return codexDir, nil }
+	defer func() { codexRootFn = origCR }()
+
+	sessions, err := a.ListSessions("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 2 {
+		t.Fatalf("expected 2 merged sessions, got %d", len(sessions))
+	}
+
+	var indexed, walked bool
+	for _, s := range sessions {
+		switch s.NativeID {
+		case "019cb730-aaaa-7000-bbbb-ccccddddeeee":
+			indexed = s.Metadata["thread_name"] == "Indexed"
+		case "019cb730-ffff-7000-aaaa-111122223333":
+			walked = true
+		}
+	}
+	if !indexed || !walked {
+		t.Fatalf("expected indexed and walked sessions, got %#v", sessions)
+	}
+}
+
 func TestGetSession(t *testing.T) {
 	cwd := "/Users/test/myproject"
 	root := setupSessionTree(t, cwd)

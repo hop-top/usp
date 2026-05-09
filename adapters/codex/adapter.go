@@ -47,10 +47,18 @@ func (a *Adapter) ListSessions(cwd string) ([]session.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	if s, err := a.listFromIndex(root, cwd); err == nil {
-		return s, nil
+	indexed, indexErr := a.listFromIndex(root, cwd)
+	walked, walkErr := a.listFromWalk(root, cwd)
+	if walkErr != nil {
+		if indexErr == nil {
+			return indexed, nil
+		}
+		return nil, walkErr
 	}
-	return a.listFromWalk(root, cwd)
+	if indexErr != nil {
+		return walked, nil
+	}
+	return mergeSessions(indexed, walked), nil
 }
 
 func (a *Adapter) GetSession(id string) (*session.Session, error) {
@@ -327,6 +335,31 @@ func (a *Adapter) listFromWalk(root, cwd string) ([]session.Session, error) {
 	return out, nil
 }
 
+func mergeSessions(indexed, walked []session.Session) []session.Session {
+	out := make([]session.Session, 0, len(indexed)+len(walked))
+	seen := make(map[string]bool, len(indexed)+len(walked))
+	for _, s := range indexed {
+		key := s.NativeID
+		if key == "" {
+			key = s.ID
+		}
+		seen[key] = true
+		out = append(out, s)
+	}
+	for _, s := range walked {
+		key := s.NativeID
+		if key == "" {
+			key = s.ID
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, s)
+	}
+	return out
+}
+
 // --- file helpers ---
 
 func findSessionFile(root, id string) (string, error) {
@@ -520,11 +553,11 @@ func (c *capMap) Coverage() map[string]uxp.Support {
 	return map[string]uxp.Support{
 		"session_store": uxp.Native, "session_resume": uxp.Native,
 		"tool_execution": uxp.Native, "model_selection": uxp.Native,
-		"sandbox_mode": uxp.Native,
+		"sandbox_mode":     uxp.Native,
 		"project_grouping": uxp.Workaround, "session_search": uxp.Workaround,
 		"prompt_history": uxp.Workaround, "thread_naming": uxp.Workaround,
 		"session_archival": uxp.Workaround,
-		"project_key": uxp.Missing, "session_branching": uxp.Missing,
+		"project_key":      uxp.Missing, "session_branching": uxp.Missing,
 		"session_export": uxp.Missing, "session_diff": uxp.Missing,
 		"multi_model": uxp.Missing, "cost_tracking": uxp.Missing,
 		"token_counting": uxp.Missing, "context_management": uxp.Missing,

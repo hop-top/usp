@@ -90,7 +90,7 @@ func TestLoadConfigEnvOverridesFile(t *testing.T) {
 	}
 }
 
-func TestLoadConfigExplicitConfigPath(t *testing.T) {
+func TestLoadConfigExtraConfigPath(t *testing.T) {
 	tmp := t.TempDir()
 	explicit := filepath.Join(tmp, "custom.yaml")
 	body := []byte("default_limit: 99\n")
@@ -99,13 +99,25 @@ func TestLoadConfigExplicitConfigPath(t *testing.T) {
 	}
 
 	v := viper.New()
-	v.Set("config", explicit)
-	cfg, err := loadConfig(v)
+	cfg, err := loadConfigWithLayers(v, []string{explicit}, nil)
 	if err != nil {
 		t.Fatalf("loadConfig: %v", err)
 	}
 	if cfg.DefaultLimit != 99 {
-		t.Errorf("DefaultLimit = %d, want 99 (--config override)", cfg.DefaultLimit)
+		t.Errorf("DefaultLimit = %d, want 99 (-c extra file)", cfg.DefaultLimit)
+	}
+}
+
+func TestLoadConfigOverride(t *testing.T) {
+	v := viper.New()
+	cfg, err := loadConfigWithLayers(v, nil, map[string]any{
+		"default_limit": 99,
+	})
+	if err != nil {
+		t.Fatalf("loadConfig: %v", err)
+	}
+	if cfg.DefaultLimit != 99 {
+		t.Errorf("DefaultLimit = %d, want 99 (-c key=value override)", cfg.DefaultLimit)
 	}
 }
 

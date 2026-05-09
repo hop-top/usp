@@ -2,16 +2,12 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	kitcliconfig "hop.top/kit/go/console/cli/config"
 	kitconfig "hop.top/kit/go/core/config"
-	"hop.top/kit/go/core/xdg"
 )
 
 // Config is the persisted shape of usp's config file.
@@ -22,28 +18,20 @@ import (
 //  2. /etc/usp/config.yaml
 //  3. $XDG_CONFIG_HOME/usp/config.yaml
 //  4. ./.usp.yaml
-//  5. --config <path> override
+//  5. -c/--config extra file layers
 //  6. env (USP_*)
-//  7. CLI flags
+//  7. -c/--config key=value overrides
+//  8. CLI flags
 type Config struct {
 	DefaultTool  string `yaml:"default_tool"`
 	DefaultLimit int    `yaml:"default_limit"`
 }
 
+var uspConfigMarkers = []string{".usp.yaml", ".usp/config.yaml"}
+
 // defaultConfig returns the baseline values for a fresh install.
 func defaultConfig() Config {
 	return Config{DefaultTool: "", DefaultLimit: 20}
-}
-
-// registerConfigGlobals adds --config and --offline persistent flags to
-// root and binds them to viper. Call after cli.New.
-func registerConfigGlobals(cmd *cobra.Command, v *viper.Viper) {
-	cmd.PersistentFlags().String("config", "",
-		"Path to YAML config file (overrides standard search)")
-	cmd.PersistentFlags().Bool("offline", false,
-		"Disable network operations")
-	_ = v.BindPFlag("config", cmd.PersistentFlags().Lookup("config"))
-	_ = v.BindPFlag("offline", cmd.PersistentFlags().Lookup("offline"))
 }
 
 // loadConfig resolves the layered config and merges it into rootViper
@@ -51,52 +39,26 @@ func registerConfigGlobals(cmd *cobra.Command, v *viper.Viper) {
 // env. Errors during file parsing are returned; missing files are
 // silently skipped per kit/config semantics.
 func loadConfig(v *viper.Viper) (Config, error) {
-	cfg := defaultConfig()
+	return loadConfigWithLayers(v, nil, nil)
+}
 
-	userPath := ""
-	if dir, err := xdg.ConfigDir("usp"); err == nil {
-		userPath = filepath.Join(dir, "config.yaml")
-	}
-
-	projectPath := ""
-	if cwd, err := os.Getwd(); err == nil {
-		projectPath = filepath.Join(cwd, ".usp.yaml")
-	}
-
-	opts := kitconfig.Options{
-		SystemConfigPath:  "/etc/usp/config.yaml",
-		UserConfigPath:    userPath,
-		ProjectConfigPath: projectPath,
-	}
+func loadConfigWithLayers(
+	v *viper.Viper,
+	extraPaths []string,
+	overrides map[string]any,
+) (Config, error) {
+	cfg := Config{}
+	opts := kitconfig.OptionsForToolWithMarkers("usp", uspConfigMarkers)
+	opts.Defaults = defaultConfig()
+	opts.ExtraConfigPaths = extraPaths
+	opts.Overrides = overrides
+	opts.Viper = v
+	opts.EnvPrefix = "USP"
 	if err := kitconfig.Load(&cfg, opts); err != nil {
 		return cfg, fmt.Errorf("load config: %w", err)
 	}
-
-	// Explicit --config override wins over the search path. Re-run with
-	// only that path as the project layer so its values overwrite the
-	// merged result.
-	if explicit := v.GetString("config"); explicit != "" {
-		var override Config
-		if err := kitconfig.Load(&override, kitconfig.Options{
-			ProjectConfigPath: explicit,
-		}); err != nil {
-			return cfg, fmt.Errorf("load --config %s: %w", explicit, err)
-		}
-		mergeConfig(&cfg, &override)
-	}
-
-	// Env vars override config files. USP_DEFAULT_TOOL, USP_DEFAULT_LIMIT.
-	v.SetEnvPrefix("USP")
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
-	v.AutomaticEnv()
-
-	// Surface defaults via viper so command flags pick them up when unset.
-	if !v.IsSet("default_tool") {
-		v.SetDefault("default_tool", cfg.DefaultTool)
-	}
-	if !v.IsSet("default_limit") {
-		v.SetDefault("default_limit", cfg.DefaultLimit)
-	}
+	v.SetDefault("default_tool", cfg.DefaultTool)
+	v.SetDefault("default_limit", cfg.DefaultLimit)
 	return cfg, nil
 }
 
@@ -128,55 +90,15 @@ func configCmd(_ *viper.Viper) *cobra.Command {
 // → user → system → defaults) for the kit-shared `config paths` cmd.
 // Highest precedence first.
 func uspConfigPathsResolver(cwd string) []kitcliconfig.ResolvedPath {
-	abs, err := filepath.Abs(cwd)
-	if err != nil {
-		abs = cwd
-	}
-	out := make([]kitcliconfig.ResolvedPath, 0, 4)
-
-	projectPath := filepath.Join(abs, ".usp.yaml")
-	out = append(out, kitcliconfig.ResolvedPath{
-		Path:   projectPath,
-		Source: "project",
-		Scope:  "project",
-		Exists: regularFileExists(projectPath),
-	})
-
-	if dir, err := xdg.ConfigDir("usp"); err == nil {
-		userPath := filepath.Join(dir, "config.yaml")
+	raw := kitconfig.PathsForToolWithMarkers(cwd, "usp", uspConfigMarkers)
+	out := make([]kitcliconfig.ResolvedPath, 0, len(raw))
+	for _, r := range raw {
 		out = append(out, kitcliconfig.ResolvedPath{
-			Path:   userPath,
-			Source: "user",
-			Scope:  "user",
-			Exists: regularFileExists(userPath),
+			Path:   r.Path,
+			Source: r.Source,
+			Scope:  r.Scope,
+			Exists: r.Exists,
 		})
 	}
-
-	const sysPath = "/etc/usp/config.yaml"
-	out = append(out, kitcliconfig.ResolvedPath{
-		Path:   sysPath,
-		Source: "system",
-		Scope:  "system",
-		Exists: regularFileExists(sysPath),
-	})
-
-	out = append(out, kitcliconfig.ResolvedPath{
-		Path:   "<defaults>",
-		Source: "default",
-		Scope:  "default",
-		Exists: true,
-	})
 	return out
-}
-
-// regularFileExists reports whether path resolves to a regular file.
-func regularFileExists(path string) bool {
-	if path == "" {
-		return false
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	return info.Mode().IsRegular()
 }

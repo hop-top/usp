@@ -260,8 +260,8 @@ type geminiChat struct {
 }
 
 // InjectSession writes turns into Gemini's native history dir as a
-// new chat JSON file, enabling cross-CLI resume via `gemini chat
-// resume <tag>`.
+// new chat JSON file, enabling cross-CLI resume via `gemini --resume
+// <tag>`.
 //
 // CAVEAT (2026-04-11): Gemini CLI has no observed chat files on disk.
 // Whether it actually reads injected files on resume is unverified.
@@ -309,7 +309,7 @@ func (a *Adapter) InjectSession(cwd string, turns []session.Turn) (string, error
 
 // ResumeCmd returns the CLI command to resume an injected session.
 func (a *Adapter) ResumeCmd(nativeID string) []string {
-	return []string{"gemini", "chat", "resume", nativeID}
+	return []string{"gemini", "--resume", nativeID}
 }
 
 // generateTag returns a "usp-resume-<8hex>" tag.

@@ -367,7 +367,7 @@ func TestGetSession_AssistantModelAbsent(t *testing.T) {
 func TestResumeCmd(t *testing.T) {
 	a := &Adapter{}
 	got := a.ResumeCmd("my-tag")
-	want := []string{"gemini", "chat", "resume", "my-tag"}
+	want := []string{"gemini", "--resume", "my-tag"}
 	if len(got) != len(want) {
 		t.Fatalf("ResumeCmd() = %v, want %v", got, want)
 	}

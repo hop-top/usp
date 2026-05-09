@@ -20,6 +20,20 @@ func TestLoadState_MissingFile_ReturnsEmpty(t *testing.T) {
 	}
 }
 
+func TestDefaultStatePathHonorsXDGDataHome(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", dir)
+
+	got, err := DefaultStatePath()
+	if err != nil {
+		t.Fatalf("DefaultStatePath: %v", err)
+	}
+	want := filepath.Join(dir, "usp-ctxt", "last_run.json")
+	if got != want {
+		t.Errorf("DefaultStatePath = %q, want %q", got, want)
+	}
+}
+
 func TestStateRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "last_run.json")

@@ -37,6 +37,7 @@ var version = "dev"
 // RunE bodies read globals (format, quiet, no-color, no-hints) from
 // here. Set in main; defaults to viper.New() for unit tests.
 var rootViper = viper.New()
+var activeRoot *cli.Root
 
 func main() {
 	var root *cli.Root
@@ -67,6 +68,7 @@ func main() {
 		},
 	})
 	rootViper = root.Viper
+	activeRoot = root
 
 	// Pre-parse default at Info level. Replaced by hook after parse.
 	slog.SetDefault(slog.New(kitlog.New(root.Viper)))
@@ -82,6 +84,7 @@ func main() {
 		resumeCmd(),
 		doctorCmd(),
 		setupCmd(),
+		mcpCmd(),
 		versionCmd(),
 		configCmd(root.Viper),
 		upgradeCmd(),

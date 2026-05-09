@@ -16,6 +16,7 @@ func TestRootGroupsRegistered(t *testing.T) {
 		resumeCmd(),
 		doctorCmd(),
 		setupCmd(),
+		mcpCmd(),
 		versionCmd(),
 	)
 	applyCommandGroups(root.Cmd)
@@ -25,6 +26,7 @@ func TestRootGroupsRegistered(t *testing.T) {
 		"resume":  "lifecycle",
 		"doctor":  "organize",
 		"setup":   "organize",
+		"mcp":     "management",
 		"version": "management",
 	}
 	for _, c := range root.Cmd.Commands() {
@@ -47,6 +49,7 @@ func TestHelpDoesNotErrorWithGroups(t *testing.T) {
 		resumeCmd(),
 		doctorCmd(),
 		setupCmd(),
+		mcpCmd(),
 		versionCmd(),
 	)
 	applyCommandGroups(root.Cmd)
@@ -71,6 +74,7 @@ func TestHelpAll_RevealsManagement(t *testing.T) {
 		resumeCmd(),
 		doctorCmd(),
 		setupCmd(),
+		mcpCmd(),
 		versionCmd(),
 	)
 	applyCommandGroups(root.Cmd)

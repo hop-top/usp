@@ -24,13 +24,13 @@ func TestAliasCmd_GroupAssignment(t *testing.T) {
 }
 
 // TestAliasCmd_Subcommands ensures the kit-built alias group exposes
-// list/add/remove leaves under usp.
+// list/add/delete leaves under usp.
 func TestAliasCmd_Subcommands(t *testing.T) {
 	root := cli.New(cli.Config{Name: "usp", Version: "test"})
 	store := alias.NewStore(filepath.Join(t.TempDir(), "aliases.yaml"))
 	cmd := aliasCmd(root, store)
 
-	want := map[string]bool{"list": false, "add": false, "remove": false}
+	want := map[string]bool{"list": false, "add": false, "delete": false}
 	for _, sub := range cmd.Commands() {
 		if _, ok := want[sub.Name()]; ok {
 			want[sub.Name()] = true

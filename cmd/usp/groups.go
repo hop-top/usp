@@ -12,6 +12,7 @@ var commandGroups = map[string]string{
 	"resume":  "lifecycle",
 	"doctor":  "organize",
 	"setup":   "organize",
+	"mcp":     "management",
 	"version": "management",
 	"config":  "management",
 	"upgrade": "management",

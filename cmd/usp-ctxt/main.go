@@ -4,7 +4,7 @@
 // It walks each detected CLI's session list since a high-water-mark,
 // projects each session into a ctxt-ready payload, and upserts
 // through the ctxt CLI (`ctxt analyze --source-key usp/<id>`).
-// State persists at ~/.local/share/usp-ctxt/last_run.json so re-runs
+// State persists under XDG data home at usp-ctxt/last_run.json so re-runs
 // only ingest new sessions.
 //
 // Spec: <labspace>/hop/docs/ingestion-retrieval/spec.md §4
@@ -12,11 +12,11 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 	"hop.top/kit/go/console/cli"
+	"hop.top/usp/internal/uspctxt"
 )
 
 var version = "dev"
@@ -52,7 +52,7 @@ func syncCmd() *cobra.Command {
 		RunE: func(c *cobra.Command, _ []string) error {
 			path := statePath
 			if path == "" {
-				p, err := defaultStatePath()
+				p, err := uspctxt.DefaultStatePath()
 				if err != nil {
 					return err
 				}
@@ -74,7 +74,7 @@ func syncCmd() *cobra.Command {
 	cmd.Flags().StringVar(&agent, "agent", "",
 		"Producer agent id (aps profile); also: $USP_CTXT_AGENT")
 	cmd.Flags().StringVar(&statePath, "state", "",
-		"State file path (default: ~/.local/share/usp-ctxt/last_run.json)")
+		"State file path (default: XDG data home usp-ctxt/last_run.json)")
 	cmd.Flags().StringVar(&ctxtServer, "ctxt-server", "",
 		"ctxt server URL (default: ctxt's own default)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false,
@@ -98,12 +98,4 @@ func pickAgent(flag, env string) string {
 		return env
 	}
 	return ""
-}
-
-func defaultStatePath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("home: %w", err)
-	}
-	return home + "/.local/share/usp-ctxt/last_run.json", nil
 }

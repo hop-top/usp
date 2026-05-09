@@ -3,12 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
-	"sort"
-	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 	"hop.top/kit/go/console/output"
+	"hop.top/usp/internal/api"
 	"hop.top/usp/internal/sessionutil"
 	"hop.top/usp/session"
 )
@@ -57,7 +55,7 @@ the outcome (invoked / declined / errored).
 
 Filters AND-combine: --session, --tool, --project, --name,
 --since, --until.`,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(c *cobra.Command, _ []string) error {
 			sinceT, err := sessionutil.ParseSince(since)
 			if err != nil {
 				return fmt.Errorf("invalid --since: %w", err)
@@ -72,21 +70,29 @@ Filters AND-combine: --session, --tool, --project, --name,
 			if tool == "" {
 				tool = cliFlag
 			}
-			adapters := sessionutil.FilterAdapters(allAdapters(), tool)
-			if adapters == nil {
-				return fmt.Errorf("unknown tool %q", tool)
-			}
-
-			events, err := collectSkillEvents(adapters, sessionID, project, sinceT, untilT)
+			svc, err := newAPIService()
 			if err != nil {
 				return err
 			}
-			if name != "" {
-				events = filterSkillByName(events, name)
+			defer svc.Close()
+
+			var events []session.SkillEvent
+			if err := runWithProgress(c.Context(), "skills", "loading skill events", func() error {
+				var err error
+				events, err = svc.ListSkillEvents(
+					c.Context(),
+					api.ListSkillEventsRequest{
+						SessionID: sessionID,
+						Tool:      tool,
+						Project:   project,
+						Name:      name,
+						Since:     sinceT,
+						Until:     untilT,
+					})
+				return err
+			}); err != nil {
+				return err
 			}
-			sort.Slice(events, func(i, j int) bool {
-				return events[i].Timestamp.Before(events[j].Timestamp)
-			})
 
 			format := formatFromViper()
 			if format != output.Table {
@@ -121,94 +127,6 @@ Filters AND-combine: --session, --tool, --project, --name,
 	cmd.Flags().StringVar(&until, "until", "",
 		"Only show skills invoked until (e.g. 2026-04-15, 1h)")
 	return cmd
-}
-
-// collectSkillEvents fans out to every adapter that supports
-// skill extraction, narrowing by session/project/time. Adapters
-// that do not implement [session.SkillExtractor] emit a single
-// row per matched session with Unsupported=true.
-func collectSkillEvents(
-	adapters map[string]session.SessionAdapter,
-	sessionID, project string,
-	since, until time.Time,
-) ([]session.SkillEvent, error) {
-	var out []session.SkillEvent
-
-	// Resolve sessions to scan: either a single ID, or every
-	// session reachable through ListSessions(project).
-	type target struct {
-		s   session.Session
-		cli string
-		a   session.SessionAdapter
-	}
-	var targets []target
-
-	if sessionID != "" {
-		order := adapterOrder(sessionID)
-		opts := sessionutil.ResolveOpts{Project: project, Since: since}
-		s, cli, a, err := sessionutil.ResolveSessionID(sessionID, adapters, order, opts)
-		if err != nil {
-			return nil, err
-		}
-		targets = append(targets, target{s: *s, cli: cli, a: a})
-	} else {
-		for cli, a := range adapters {
-			ss, err := a.ListSessions(project)
-			if err != nil {
-				continue
-			}
-			for _, s := range ss {
-				targets = append(targets, target{s: s, cli: cli, a: a})
-			}
-		}
-	}
-
-	for _, t := range targets {
-		if !since.IsZero() && t.s.StartedAt.Before(since) {
-			continue
-		}
-		if !until.IsZero() && t.s.StartedAt.After(until) {
-			continue
-		}
-		ext, ok := t.a.(session.SkillExtractor)
-		if !ok {
-			out = append(out, session.SkillEvent{
-				SessionID:   t.s.NativeID,
-				CLI:         t.cli,
-				Timestamp:   t.s.StartedAt,
-				Unsupported: true,
-			})
-			continue
-		}
-		evs, err := ext.ExtractSkills(t.s.NativeID)
-		if err != nil {
-			continue
-		}
-		for _, e := range evs {
-			if !since.IsZero() && e.Timestamp.Before(since) {
-				continue
-			}
-			if !until.IsZero() && e.Timestamp.After(until) {
-				continue
-			}
-			out = append(out, e)
-		}
-	}
-	return out, nil
-}
-
-func filterSkillByName(events []session.SkillEvent, name string) []session.SkillEvent {
-	needle := strings.ToLower(name)
-	var out []session.SkillEvent
-	for _, e := range events {
-		if e.Unsupported {
-			continue
-		}
-		if strings.Contains(strings.ToLower(e.Name), needle) {
-			out = append(out, e)
-		}
-	}
-	return out
 }
 
 func skillRowsFromEvents(events []session.SkillEvent) []skillRow {
@@ -256,4 +174,3 @@ func renderSkillsForShow(format string, events []session.SkillEvent) error {
 	}
 	return output.Render(os.Stdout, output.Format(format), rows)
 }
-

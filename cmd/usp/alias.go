@@ -8,7 +8,7 @@
 // Surfaces:
 //   - `usp alias` / `alias list`        — dump active aliases
 //   - `usp alias add <name> <target...>` — set/update an alias
-//   - `usp alias remove <name>`          — drop an alias
+//   - `usp alias delete <name>`          — drop an alias
 //
 // Stored aliases are also registered as runtime command shims so
 // `usp <alias>` dispatches to the target subcommand.

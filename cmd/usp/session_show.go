@@ -3,53 +3,23 @@ package main
 import (
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 	"hop.top/kit/go/console/output"
-	"hop.top/kit/go/core/uxp"
-	"hop.top/usp/adapters/claude"
-	"hop.top/usp/adapters/codex"
-	"hop.top/usp/adapters/gemini"
-	"hop.top/usp/adapters/opencode"
+	"hop.top/usp/internal/api"
 	"hop.top/usp/internal/sessionutil"
 	"hop.top/usp/session"
 )
 
-// ID-format regexes for adapter priority hinting.
-//
-// TypeID (sess_…) is treated as cross-CLI — order falls back to
-// the default since the TypeID alone doesn't tell us which CLI
-// produced the session.
-var (
-	reUUIDv4   = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
-	reUUIDv7   = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
-	reOpenCode = regexp.MustCompile(`^ses_[a-z0-9]{26}$`)
-)
-
 func allAdapters() map[string]session.SessionAdapter {
-	return map[string]session.SessionAdapter{
-		uxp.CLIClaude:   claude.New(),
-		uxp.CLICodex:    &codex.Adapter{},
-		uxp.CLIOpenCode: opencode.New(),
-		uxp.CLIGemini:   &gemini.Adapter{},
-	}
+	return api.DefaultAdapters()
 }
 
 // adapterOrder returns adapter names to try, prioritised by ID format.
 func adapterOrder(id string) []string {
-	switch {
-	case reUUIDv4.MatchString(id):
-		return []string{uxp.CLIClaude, uxp.CLICodex, uxp.CLIOpenCode, uxp.CLIGemini}
-	case reUUIDv7.MatchString(id):
-		return []string{uxp.CLICodex, uxp.CLIClaude, uxp.CLIOpenCode, uxp.CLIGemini}
-	case reOpenCode.MatchString(id):
-		return []string{uxp.CLIOpenCode, uxp.CLIClaude, uxp.CLICodex, uxp.CLIGemini}
-	default:
-		return []string{uxp.CLIClaude, uxp.CLICodex, uxp.CLIOpenCode, uxp.CLIGemini}
-	}
+	return api.AdapterOrder(id)
 }
 
 // showResult is the unified payload for session show across all formats.
@@ -82,90 +52,101 @@ func sessionShowCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "show <id>",
+		Use:   "show [<id>]",
 		Short: "Display session metadata and turn summary",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
-			id := args[0]
-			adapters := allAdapters()
-			adapters = sessionutil.FilterAdapters(adapters, cliFlag)
-			if adapters == nil {
-				return fmt.Errorf("unknown CLI %q", cliFlag)
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			id := ""
+			if len(args) == 1 {
+				id = args[0]
 			}
-
-			var opts sessionutil.ResolveOpts
-			opts.Project = project
+			var sinceT time.Time
 			if since != "" {
 				t, err := sessionutil.ParseSince(since)
 				if err != nil {
 					return fmt.Errorf("invalid --since: %w", err)
 				}
-				opts.Since = t
+				sinceT = t
 			}
 
-			sess, matchedCLI, a, err := sessionutil.ResolveSessionID(
-				id, adapters, adapterOrder(id), opts)
+			fmt := formatFromViper()
+			svc, err := newAPIService()
 			if err != nil {
+				return err
+			}
+			defer svc.Close()
+
+			if id == "" {
+				pickerProject := project
+				if pickerProject == "" {
+					pickerProject = defaultListProject()
+				}
+				selected, err := promptSelectSessionID(c.Context(), svc,
+					api.ListSessionsRequest{
+						Project: pickerProject,
+						Tool:    cliFlag,
+						Since:   sinceT,
+					},
+					"Choose session to show",
+				)
+				if err != nil {
+					return err
+				}
+				id = selected
+			}
+
+			var detail *api.SessionDetail
+			if err := runWithProgress(c.Context(), "session", "loading session", func() error {
+				var err error
+				detail, err = svc.ShowSession(
+					c.Context(),
+					api.ShowSessionRequest{
+						ID:            id,
+						Tool:          cliFlag,
+						Project:       project,
+						Since:         sinceT,
+						IncludeSkills: showSkills,
+					})
+				return err
+			}); err != nil {
 				if strings.Contains(err.Error(), "not found") {
 					return exitNotFound(err)
 				}
 				return err
 			}
 
-			fmt := formatFromViper()
-
-			// Adapter file/db lookups need the native id.
-			ch, err := a.StreamTurns(sess.NativeID)
 			var turns []showTurn
-			if err == nil {
-				for turn := range ch {
-					turns = append(turns, showTurn{
-						Role:      string(turn.Role),
-						Content:   turn.Content,
-						Timestamp: timestampForFormat(turn.Timestamp, fmt),
-						ToolCalls: turn.ToolCalls,
-					})
-				}
+			for _, turn := range detail.Turns {
+				turns = append(turns, showTurn{
+					Role:      string(turn.Role),
+					Content:   turn.Content,
+					Timestamp: timestampForFormat(turn.Timestamp, fmt),
+					ToolCalls: turn.ToolCalls,
+				})
 			}
 
 			ended := "active"
-			if sess.EndedAt != nil {
-				ended = timestampForFormat(*sess.EndedAt, fmt)
-			}
-
-			var skills []session.SkillEvent
-			if showSkills {
-				if ext, ok := a.(session.SkillExtractor); ok {
-					if ev, err := ext.ExtractSkills(sess.NativeID); err == nil {
-						skills = ev
-					}
-				} else {
-					skills = []session.SkillEvent{{
-						SessionID:   sess.NativeID,
-						CLI:         matchedCLI,
-						Timestamp:   sess.StartedAt,
-						Unsupported: true,
-					}}
-				}
+			if detail.Session.EndedAt != nil {
+				ended = timestampForFormat(*detail.Session.EndedAt, fmt)
 			}
 
 			res := showResult{
-				ID:        sess.ID,
-				NativeID:  sess.NativeID,
-				CLI:       matchedCLI,
-				Project:   sess.ProjectCwd,
-				StartedAt: timestampForFormat(sess.StartedAt, fmt),
+				ID:        detail.Session.ID,
+				NativeID:  detail.Session.NativeID,
+				CLI:       detail.CLI,
+				Project:   detail.Session.ProjectCwd,
+				StartedAt: timestampForFormat(detail.Session.StartedAt, fmt),
 				EndedAt:   ended,
-				TurnCount: sess.TurnCount,
+				TurnCount: detail.Session.TurnCount,
 				Turns:     turns,
-				Skills:    skills,
+				Skills:    detail.Skills,
 			}
 
 			if err := output.Render(os.Stdout, fmt, res); err != nil {
 				return err
 			}
 			if showSkills && fmt == output.Table {
-				return renderSkillsForShow(fmt, skills)
+				return renderSkillsForShow(fmt, detail.Skills)
 			}
 			return nil
 		},

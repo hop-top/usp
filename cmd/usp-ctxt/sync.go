@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"time"
 
 	"hop.top/kit/go/core/uxp"
+	"hop.top/kit/go/core/xdg"
 	"hop.top/usp/adapters/claude"
 	"hop.top/usp/adapters/codex"
 	"hop.top/usp/adapters/gemini"
@@ -75,10 +74,11 @@ func runSync(ctx context.Context, p syncParams, errw, outw io.Writer) error {
 
 // adapterSource wraps the live usp adapter set as a SessionSource.
 type adapterSource struct {
-	clis     []string
-	adapters map[string]session.SessionAdapter
-	project  string
-	store    *lineage.Store
+	clis       []string
+	adapters   map[string]session.SessionAdapter
+	project    string
+	store      *lineage.Store
+	nativeByID map[string]string
 }
 
 func newAdapterSource(toolFilter, project string) *adapterSource {
@@ -99,12 +99,16 @@ func newAdapterSource(toolFilter, project string) *adapterSource {
 			clis = nil
 		}
 	}
-	src := &adapterSource{clis: clis, adapters: all, project: project}
+	src := &adapterSource{
+		clis:       clis,
+		adapters:   all,
+		project:    project,
+		nativeByID: map[string]string{},
+	}
 
 	// lineage store is best-effort; absence => no cross-CLI roots
-	home, err := os.UserHomeDir()
+	path, err := xdg.StateFile("usp", "sessions.db")
 	if err == nil {
-		path := filepath.Join(home, ".local", "state", "usp", "sessions.db")
 		if store, err := lineage.Open(path); err == nil {
 			src.store = store
 		}
@@ -126,6 +130,11 @@ func (s *adapterSource) ListSince(cli string, since time.Time) ([]session.Sessio
 	if err != nil {
 		return nil, err
 	}
+	for _, sess := range all {
+		if sess.NativeID != "" {
+			s.nativeByID[sess.ID] = sess.NativeID
+		}
+	}
 	if since.IsZero() {
 		return all, nil
 	}
@@ -144,7 +153,11 @@ func (s *adapterSource) Turns(cli, sessionID string) ([]session.Turn, error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown cli %q", cli)
 	}
-	ch, err := a.StreamTurns(sessionID)
+	nativeID := sessionID
+	if mapped := s.nativeByID[sessionID]; mapped != "" {
+		nativeID = mapped
+	}
+	ch, err := a.StreamTurns(nativeID)
 	if err != nil {
 		return nil, err
 	}

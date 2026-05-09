@@ -143,3 +143,15 @@ func TestResolveSessionID_SinceFilter(t *testing.T) {
 		t.Errorf("NativeID = %q, want abc-new", sess.NativeID)
 	}
 }
+
+func TestParseSinceUsesKitShortRelativeSyntax(t *testing.T) {
+	before := time.Now().Add(-10 * time.Minute)
+	got, err := ParseSince("10m")
+	if err != nil {
+		t.Fatalf("ParseSince: %v", err)
+	}
+	after := time.Now().Add(-10 * time.Minute)
+	if got.Before(before.Add(-time.Second)) || got.After(after.Add(time.Second)) {
+		t.Fatalf("ParseSince(10m) = %v, want about 10 minutes ago", got)
+	}
+}

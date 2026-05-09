@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	kitutil "hop.top/kit/go/core/util"
 	"hop.top/usp/internal/id"
 	"hop.top/usp/session"
 )
@@ -172,39 +173,17 @@ func sessionMatches(s *session.Session, input string) bool {
 	return false
 }
 
-// ParseSince parses duration shorthand (7d, 24h, 30m) or date
-// (2026-04-01). Returns zero time if input is empty.
+// ParseSince parses kit's shared date filter syntax (7d, 24h, 30m,
+// "2 weeks ago", 2026-04-01). Returns zero time if input is empty.
 func ParseSince(s string) (time.Time, error) {
 	if s == "" {
 		return time.Time{}, nil
 	}
-	if len(s) >= 2 {
-		unit := s[len(s)-1]
-		val := s[:len(s)-1]
-		var n int
-		if _, err := fmt.Sscanf(val, "%d", &n); err == nil {
-			switch unit {
-			case 'd':
-				return time.Now().Add(
-					-time.Duration(n) * 24 * time.Hour), nil
-			case 'h':
-				return time.Now().Add(
-					-time.Duration(n) * time.Hour), nil
-			case 'm':
-				return time.Now().Add(
-					-time.Duration(n) * time.Minute), nil
-			}
-		}
+	t, err := kitutil.ParseSince(s)
+	if err != nil {
+		return time.Time{}, fmt.Errorf(
+			"expected date filter (e.g. 10m, 7d, 2 weeks ago, 2026-04-01), got %q: %w",
+			s, err)
 	}
-	for _, layout := range []string{
-		"2006-01-02",
-		"2006-01-02T15:04:05",
-		time.RFC3339,
-	} {
-		if t, err := time.Parse(layout, s); err == nil {
-			return t, nil
-		}
-	}
-	return time.Time{}, fmt.Errorf(
-		"expected duration (7d, 24h) or date (2026-04-01), got %q", s)
+	return t, nil
 }

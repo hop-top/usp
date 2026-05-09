@@ -27,7 +27,10 @@ func TestArgsSessionListFlags(t *testing.T) {
 	if v, _ := cmd.Flags().GetInt("limit"); v != 20 {
 		t.Errorf("limit default = %d, want 20", v)
 	}
-	for _, name := range []string{"project", "tool", "since"} {
+	if v, _ := cmd.Flags().GetString("project"); v == "" {
+		t.Error("project default should be current working directory")
+	}
+	for _, name := range []string{"tool", "since"} {
 		if v, _ := cmd.Flags().GetString(name); v != "" {
 			t.Errorf("%s default = %q, want empty", name, v)
 		}
@@ -39,7 +42,7 @@ func TestArgsSessionListFlags(t *testing.T) {
 	}
 }
 
-func TestArgsSessionShowRequiresOneArg(t *testing.T) {
+func TestArgsSessionShowAcceptsOptionalArg(t *testing.T) {
 	cmd := sessionShowCmd()
 	stubRunE(cmd)
 	cmd.SilenceUsage = true
@@ -50,12 +53,10 @@ func TestArgsSessionShowRequiresOneArg(t *testing.T) {
 	}
 	// --format is inherited from root persistent flags.
 
-	// 0 args.
+	// 0 args opens the interactive picker in the real RunE path.
 	cmd.SetArgs([]string{})
-	if err := cmd.Execute(); err == nil {
-		t.Error("expected error with 0 args")
-	} else if !strings.Contains(err.Error(), "accepts 1 arg") {
-		t.Errorf("unexpected error: %v", err)
+	if err := cmd.Execute(); err != nil {
+		t.Errorf("0 args should pass arg validation: %v", err)
 	}
 
 	// 2 args.
@@ -213,13 +214,14 @@ func TestArgsCommandWiring(t *testing.T) {
 		resumeCmd(),
 		doctorCmd(),
 		setupCmd(),
+		mcpCmd(),
 	)
 
 	rootNames := map[string]bool{}
 	for _, c := range root.Cmd.Commands() {
 		rootNames[c.Name()] = true
 	}
-	for _, want := range []string{"session", "resume", "doctor", "setup"} {
+	for _, want := range []string{"session", "resume", "doctor", "setup", "mcp"} {
 		if !rootNames[want] {
 			t.Errorf("root missing subcommand %q", want)
 		}

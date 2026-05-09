@@ -25,13 +25,14 @@ import (
 type Config struct {
 	DefaultTool  string `yaml:"default_tool"`
 	DefaultLimit int    `yaml:"default_limit"`
+	CacheTTL     string `yaml:"cache_ttl"`
 }
 
 var uspConfigMarkers = []string{".usp.yaml", ".usp/config.yaml"}
 
 // defaultConfig returns the baseline values for a fresh install.
 func defaultConfig() Config {
-	return Config{DefaultTool: "", DefaultLimit: 20}
+	return Config{DefaultTool: "", DefaultLimit: 20, CacheTTL: "10m"}
 }
 
 // loadConfig resolves the layered config and merges it into rootViper
@@ -59,6 +60,7 @@ func loadConfigWithLayers(
 	}
 	v.SetDefault("default_tool", cfg.DefaultTool)
 	v.SetDefault("default_limit", cfg.DefaultLimit)
+	v.SetDefault("cache_ttl", cfg.CacheTTL)
 	return cfg, nil
 }
 
@@ -69,6 +71,9 @@ func mergeConfig(dst, src *Config) {
 	}
 	if src.DefaultLimit != 0 {
 		dst.DefaultLimit = src.DefaultLimit
+	}
+	if src.CacheTTL != "" {
+		dst.CacheTTL = src.CacheTTL
 	}
 }
 

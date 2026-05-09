@@ -17,20 +17,23 @@ func TestDefaultConfig(t *testing.T) {
 	if c.DefaultTool != "" {
 		t.Errorf("DefaultTool = %q, want empty", c.DefaultTool)
 	}
+	if c.CacheTTL != "10m" {
+		t.Errorf("CacheTTL = %q, want 10m", c.CacheTTL)
+	}
 }
 
 func TestMergeConfigSkipsZero(t *testing.T) {
-	dst := Config{DefaultTool: "claude", DefaultLimit: 50}
+	dst := Config{DefaultTool: "claude", DefaultLimit: 50, CacheTTL: "1m"}
 	src := Config{}
 	mergeConfig(&dst, &src)
-	if dst.DefaultTool != "claude" || dst.DefaultLimit != 50 {
+	if dst.DefaultTool != "claude" || dst.DefaultLimit != 50 || dst.CacheTTL != "1m" {
 		t.Errorf("merge zero src clobbered dst: %+v", dst)
 	}
 }
 
 func TestMergeConfigOverwritesNonZero(t *testing.T) {
-	dst := Config{DefaultTool: "claude", DefaultLimit: 20}
-	src := Config{DefaultTool: "codex", DefaultLimit: 50}
+	dst := Config{DefaultTool: "claude", DefaultLimit: 20, CacheTTL: "10m"}
+	src := Config{DefaultTool: "codex", DefaultLimit: 50, CacheTTL: "1m"}
 	mergeConfig(&dst, &src)
 	if dst.DefaultTool != "codex" {
 		t.Errorf("DefaultTool = %q, want codex", dst.DefaultTool)
@@ -38,12 +41,15 @@ func TestMergeConfigOverwritesNonZero(t *testing.T) {
 	if dst.DefaultLimit != 50 {
 		t.Errorf("DefaultLimit = %d, want 50", dst.DefaultLimit)
 	}
+	if dst.CacheTTL != "1m" {
+		t.Errorf("CacheTTL = %q, want 1m", dst.CacheTTL)
+	}
 }
 
 func TestLoadConfigFromProjectFile(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, ".usp.yaml")
-	body := []byte("default_limit: 5\ndefault_tool: codex\n")
+	body := []byte("default_limit: 5\ndefault_tool: codex\ncache_ttl: 1m\n")
 	if err := os.WriteFile(cfgPath, body, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -63,6 +69,9 @@ func TestLoadConfigFromProjectFile(t *testing.T) {
 	}
 	if cfg.DefaultTool != "codex" {
 		t.Errorf("DefaultTool = %q, want codex", cfg.DefaultTool)
+	}
+	if cfg.CacheTTL != "1m" {
+		t.Errorf("CacheTTL = %q, want 1m", cfg.CacheTTL)
 	}
 }
 

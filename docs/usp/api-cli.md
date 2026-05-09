@@ -377,7 +377,7 @@ usp alias [command] [--flags]
 |---|---|
 | `list` | Print the active alias table (default when no sub-command). |
 | `add <name> <target...>` | Add or update an alias. |
-| `remove <name>` | Remove an alias. Aliased to `rm`. |
+| `delete <name>` | Delete an alias. Aliased to `remove` and `rm`. |
 
 **Examples**
 
@@ -385,7 +385,7 @@ usp alias [command] [--flags]
 usp alias add ll "session list"        # `usp ll` → `usp session list`
 usp alias add slj "session list --format json"
 usp alias list
-usp alias remove ll
+usp alias delete ll
 ```
 
 **Storage** — `$XDG_CONFIG_HOME/usp/aliases.yaml` (single file, single

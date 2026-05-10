@@ -35,6 +35,7 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-logfmt/logfmt v0.6.1 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
+	github.com/gofrs/flock v0.13.0 // indirect
 	github.com/gofrs/uuid/v5 v5.2.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/mdns v1.0.6 // indirect

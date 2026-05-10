@@ -95,6 +95,7 @@ func filterSessionItems(
 	if filter == "" {
 		return items
 	}
+	projectLabels := newProjectLabelResolver()
 	var out []api.SessionListItem
 	for _, item := range items {
 		s := item.Session
@@ -102,7 +103,7 @@ func filterSessionItems(
 			s.ID,
 			s.NativeID,
 			string(s.CLI),
-			projectName(s.ProjectCwd),
+			projectLabels.Label(s.ProjectCwd),
 			s.ProjectCwd,
 			item.Actions,
 		}, " "))

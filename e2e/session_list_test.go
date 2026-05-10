@@ -20,6 +20,7 @@ import (
 )
 
 const fixtureCwd = "/tmp/test-project"
+const geminiFixtureSessionID = "77777777-7777-4777-8777-777777777777"
 
 // --- fixture writers ---
 
@@ -67,7 +68,7 @@ func setupClaude(t *testing.T, home string) *claude.Adapter {
 		{
 			"uuid": "c1", "type": "user",
 			"timestamp": "2026-04-11T09:00:00Z",
-			"cwd": fixtureCwd, "sessionId": "claude-sess-01",
+			"cwd":       fixtureCwd, "sessionId": "claude-sess-01",
 			"message": map[string]any{"role": "user", "content": "Hello"},
 		},
 		{
@@ -97,12 +98,35 @@ func setupGemini(t *testing.T, home string) *gemini.Adapter {
 		},
 	)
 
-	histDir := filepath.Join(home, ".gemini", "history", alias)
-	writeJSON(t, filepath.Join(histDir, "gemini-sess-01.json"),
-		map[string]any{
-			"history": []map[string]any{
-				{"role": "user", "content": "Hello Gemini"},
-				{"role": "model", "content": "Hi from Gemini"},
+	projectDir := filepath.Join(home, ".gemini", "tmp", alias)
+	if err := os.MkdirAll(filepath.Join(projectDir, "chats"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(projectDir, ".project_root"), []byte(fixtureCwd), 0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	writeJSONL(t,
+		filepath.Join(projectDir, "chats",
+			"session-2026-04-11T09-00-"+geminiFixtureSessionID[:8]+".jsonl"),
+		[]map[string]any{
+			{
+				"sessionId":   geminiFixtureSessionID,
+				"projectHash": "hash",
+				"startTime":   "2026-04-11T09:00:00Z",
+				"lastUpdated": "2026-04-11T09:00:05Z",
+				"kind":        "main",
+			},
+			{
+				"id": "g1", "type": "user",
+				"timestamp": "2026-04-11T09:00:00Z",
+				"content":   []map[string]string{{"text": "Hello Gemini"}},
+			},
+			{
+				"id": "g2", "type": "gemini",
+				"timestamp": "2026-04-11T09:00:05Z",
+				"content":   "Hi from Gemini",
 			},
 		},
 	)
@@ -313,7 +337,7 @@ func TestCrossCliGetSession(t *testing.T) {
 	}{
 		{"claude", claudeA, "claude-sess-01",
 			uxp.CLIClaude, fixtureCwd, 2},
-		{"gemini", geminiA, "gemini-sess-01",
+		{"gemini", geminiA, geminiFixtureSessionID,
 			uxp.CLIGemini, fixtureCwd, 0},
 		{"codex", codexA, "codex-sess-01",
 			uxp.CLICodex, fixtureCwd, 2},

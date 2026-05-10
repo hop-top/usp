@@ -28,15 +28,40 @@ func writeProjectsJSON(t *testing.T, tmpHome string, projects map[string]string)
 	}
 }
 
-// mkHistoryDir creates ~/.gemini/history/<alias>/ with a .project_root marker.
+// mkHistoryDir creates ~/.gemini/tmp/<alias>/chats with a .project_root marker.
 func mkHistoryDir(t *testing.T, tmpHome, alias, cwd string) {
 	t.Helper()
-	dir := filepath.Join(tmpHome, ".gemini", "history", alias)
+	dir := filepath.Join(tmpHome, ".gemini", "tmp", alias)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(
 		filepath.Join(dir, ".project_root"), []byte(cwd), 0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "chats"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writeChatJSONL(t *testing.T, tmpHome, alias, sessionID string, lines ...any) {
+	t.Helper()
+	chatDir := filepath.Join(tmpHome, ".gemini", "tmp", alias, "chats")
+	if err := os.MkdirAll(chatDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	all := []any{chatHeader{
+		SessionID:   sessionID,
+		ProjectHash: "hash",
+		StartTime:   "2026-05-09T12:00:00Z",
+		LastUpdated: "2026-05-09T12:00:00Z",
+		Kind:        "main",
+	}}
+	all = append(all, lines...)
+	if err := writeJSONLines(
+		filepath.Join(chatDir, "session-2026-05-09T12-00-"+sessionID[:8]+".jsonl"),
+		all,
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -80,9 +105,9 @@ func TestProjectKey_Fallback(t *testing.T) {
 func TestProjectKey_CollisionAlias(t *testing.T) {
 	tmp := t.TempDir()
 	writeProjectsJSON(t, tmp, map[string]string{
-		"/a/hops/main":  "main",
-		"/b/hops/main":  "main-1",
-		"/c/hops/main":  "main-2",
+		"/a/hops/main": "main",
+		"/b/hops/main": "main-1",
+		"/c/hops/main": "main-2",
 	})
 
 	a := &Adapter{HomeDir: tmp}
@@ -128,16 +153,8 @@ func TestListSessions_WithChatFiles(t *testing.T) {
 	writeProjectsJSON(t, tmp, map[string]string{cwd: "myapp"})
 	mkHistoryDir(t, tmp, "myapp", cwd)
 
-	// Write mock chat files (for when Gemini starts writing them).
-	histDir := filepath.Join(tmp, ".gemini", "history", "myapp")
-	for _, tag := range []string{"refactor-db", "add-auth"} {
-		data := []byte(`{"history":[]}`)
-		if err := os.WriteFile(
-			filepath.Join(histDir, tag+".json"), data, 0o644,
-		); err != nil {
-			t.Fatal(err)
-		}
-	}
+	writeChatJSONL(t, tmp, "myapp", "11111111-1111-4111-8111-111111111111")
+	writeChatJSONL(t, tmp, "myapp", "22222222-2222-4222-8222-222222222222")
 
 	a := &Adapter{HomeDir: tmp}
 	sessions, err := a.ListSessions(cwd)
@@ -158,7 +175,8 @@ func TestListSessions_WithChatFiles(t *testing.T) {
 			t.Errorf("session ProjectCwd = %q, want %q", s.ProjectCwd, cwd)
 		}
 	}
-	if !ids["refactor-db"] || !ids["add-auth"] {
+	if !ids["11111111-1111-4111-8111-111111111111"] ||
+		!ids["22222222-2222-4222-8222-222222222222"] {
 		t.Errorf("unexpected native session IDs: %v", ids)
 	}
 }
@@ -180,22 +198,15 @@ func TestGetSession_Found(t *testing.T) {
 	cwd := "/Users/me/proj"
 	writeProjectsJSON(t, tmp, map[string]string{cwd: "proj"})
 	mkHistoryDir(t, tmp, "proj", cwd)
-
-	histDir := filepath.Join(tmp, ".gemini", "history", "proj")
-	if err := os.WriteFile(
-		filepath.Join(histDir, "my-chat.json"),
-		[]byte(`{"history":[]}`), 0o644,
-	); err != nil {
-		t.Fatal(err)
-	}
+	writeChatJSONL(t, tmp, "proj", "33333333-3333-4333-8333-333333333333")
 
 	a := &Adapter{HomeDir: tmp}
-	s, err := a.GetSession("my-chat")
+	s, err := a.GetSession("33333333-3333-4333-8333-333333333333")
 	if err != nil {
 		t.Fatalf("GetSession() error: %v", err)
 	}
-	if s.NativeID != "my-chat" {
-		t.Errorf("NativeID = %q, want %q", s.NativeID, "my-chat")
+	if s.NativeID != "33333333-3333-4333-8333-333333333333" {
+		t.Errorf("NativeID = %q", s.NativeID)
 	}
 	if s.ProjectCwd != cwd {
 		t.Errorf("ProjectCwd = %q, want %q", s.ProjectCwd, cwd)
@@ -219,23 +230,17 @@ func TestStreamTurns_ParsesHistory(t *testing.T) {
 	writeProjectsJSON(t, tmp, map[string]string{cwd: "proj"})
 	mkHistoryDir(t, tmp, "proj", cwd)
 
-	chat := map[string]any{
-		"history": []map[string]string{
-			{"role": "user", "content": "hello"},
-			{"role": "model", "content": "hi there"},
-			{"role": "user", "content": "thanks"},
-		},
-	}
-	data, _ := json.Marshal(chat)
-	histDir := filepath.Join(tmp, ".gemini", "history", "proj")
-	if err := os.WriteFile(
-		filepath.Join(histDir, "convo.json"), data, 0o644,
-	); err != nil {
-		t.Fatal(err)
-	}
+	writeChatJSONL(t, tmp, "proj", "44444444-4444-4444-8444-444444444444",
+		map[string]any{"type": "user", "timestamp": "2026-05-09T12:00:01Z",
+			"content": []chatContentPart{{Text: "hello"}}},
+		map[string]any{"type": "gemini", "timestamp": "2026-05-09T12:00:02Z",
+			"content": "hi there"},
+		map[string]any{"type": "user", "timestamp": "2026-05-09T12:00:03Z",
+			"content": []chatContentPart{{Text: "thanks"}}},
+	)
 
 	a := &Adapter{HomeDir: tmp}
-	ch, err := a.StreamTurns("convo")
+	ch, err := a.StreamTurns("44444444-4444-4444-8444-444444444444")
 	if err != nil {
 		t.Fatalf("StreamTurns() error: %v", err)
 	}
@@ -280,7 +285,7 @@ func TestCapabilities(t *testing.T) {
 		t.Error("expected missing for append-stream")
 	}
 
-	// Coverage count: 9 native + 4 workaround + 7 missing = 20
+	// Coverage count: 10 native + 4 workaround + 6 missing = 20
 	cov := caps.Coverage()
 	var native, workaround, missing int
 	for _, s := range cov {
@@ -293,14 +298,14 @@ func TestCapabilities(t *testing.T) {
 			missing++
 		}
 	}
-	if native != 9 {
-		t.Errorf("native count = %d, want 9", native)
+	if native != 10 {
+		t.Errorf("native count = %d, want 10", native)
 	}
 	if workaround != 4 {
 		t.Errorf("workaround count = %d, want 4", workaround)
 	}
-	if missing != 7 {
-		t.Errorf("missing count = %d, want 7", missing)
+	if missing != 6 {
+		t.Errorf("missing count = %d, want 6", missing)
 	}
 }
 
@@ -314,23 +319,13 @@ func TestGetSession_AssistantModelFromTranscript(t *testing.T) {
 	writeProjectsJSON(t, tmp, map[string]string{cwd: "proj"})
 	mkHistoryDir(t, tmp, "proj", cwd)
 
-	histDir := filepath.Join(tmp, ".gemini", "history", "proj")
-	chat := map[string]any{
-		"model": "gemini-3-pro",
-		"history": []map[string]any{
-			{"role": "user", "content": "hi"},
-			{"role": "model", "content": "hello"},
-		},
-	}
-	data, _ := json.Marshal(chat)
-	if err := os.WriteFile(
-		filepath.Join(histDir, "with-model.json"), data, 0o644,
-	); err != nil {
-		t.Fatal(err)
-	}
+	writeChatJSONL(t, tmp, "proj", "55555555-5555-4555-8555-555555555555",
+		map[string]any{"type": "user", "content": []chatContentPart{{Text: "hi"}}},
+		map[string]any{"type": "gemini", "content": "hello", "model": "gemini-3-pro"},
+	)
 
 	a := &Adapter{HomeDir: tmp}
-	s, err := a.GetSession("with-model")
+	s, err := a.GetSession("55555555-5555-4555-8555-555555555555")
 	if err != nil {
 		t.Fatalf("GetSession: %v", err)
 	}
@@ -345,16 +340,10 @@ func TestGetSession_AssistantModelAbsent(t *testing.T) {
 	writeProjectsJSON(t, tmp, map[string]string{cwd: "proj"})
 	mkHistoryDir(t, tmp, "proj", cwd)
 
-	histDir := filepath.Join(tmp, ".gemini", "history", "proj")
-	if err := os.WriteFile(
-		filepath.Join(histDir, "no-model.json"),
-		[]byte(`{"history":[]}`), 0o644,
-	); err != nil {
-		t.Fatal(err)
-	}
+	writeChatJSONL(t, tmp, "proj", "66666666-6666-4666-8666-666666666666")
 
 	a := &Adapter{HomeDir: tmp}
-	s, err := a.GetSession("no-model")
+	s, err := a.GetSession("66666666-6666-4666-8666-666666666666")
 	if err != nil {
 		t.Fatalf("GetSession: %v", err)
 	}
@@ -393,45 +382,50 @@ func TestInjectSession(t *testing.T) {
 		{Role: session.RoleSystem, Content: "context info", Timestamp: time.Now()},
 	}
 
-	tag, err := a.InjectSession(cwd, turns)
+	sessionID, err := a.InjectSession(cwd, turns)
 	if err != nil {
 		t.Fatalf("InjectSession() error: %v", err)
 	}
-	if !strings.HasPrefix(tag, "usp-resume-") {
-		t.Fatalf("tag %q missing usp-resume- prefix", tag)
-	}
-	if len(tag) != len("usp-resume-")+8 {
-		t.Fatalf("tag %q unexpected length", tag)
+	if len(sessionID) != len("00000000-0000-0000-0000-000000000000") {
+		t.Fatalf("sessionID %q unexpected length", sessionID)
 	}
 
 	// Verify file was created in the right place.
-	p := filepath.Join(tmp, ".gemini", "history", "myapp", tag+".json")
-	data, err := os.ReadFile(p)
+	chatDir := filepath.Join(tmp, ".gemini", "tmp", "myapp", "chats")
+	entries, err := os.ReadDir(chatDir)
+	if err != nil {
+		t.Fatalf("read injected chat dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("chat files = %d, want 1", len(entries))
+	}
+	lines, err := readJSONLines(filepath.Join(chatDir, entries[0].Name()))
 	if err != nil {
 		t.Fatalf("read injected file: %v", err)
 	}
-
-	var chat geminiChat
-	if err := json.Unmarshal(data, &chat); err != nil {
-		t.Fatalf("parse injected file: %v", err)
+	header, err := readChatHeader(filepath.Join(chatDir, entries[0].Name()))
+	if err != nil {
+		t.Fatalf("read header: %v", err)
 	}
-	if len(chat.History) != 3 {
-		t.Fatalf("history len = %d, want 3", len(chat.History))
+	if header.SessionID != sessionID {
+		t.Fatalf("header sessionID = %q, want %q", header.SessionID, sessionID)
 	}
-	if chat.History[0].Role != "user" || chat.History[0].Parts[0].Text != "hello" {
-		t.Errorf("msg[0] = %+v", chat.History[0])
+	if len(lines) != 7 {
+		t.Fatalf("jsonl lines = %d, want 7", len(lines))
 	}
-	if chat.History[1].Role != "model" {
-		t.Errorf("msg[1].role = %q, want model", chat.History[1].Role)
+	turn0, ok := chatLineToTurn(lines[1])
+	if !ok || turn0.Role != session.RoleUser || turn0.Content != "hello" {
+		t.Errorf("line[1] turn = %+v ok=%v", turn0, ok)
 	}
-	if !strings.Contains(chat.History[1].Parts[0].Text, "[Tool: Read") {
-		t.Errorf("msg[1] missing tool summary: %s", chat.History[1].Parts[0].Text)
+	turn1, ok := chatLineToTurn(lines[3])
+	if !ok || turn1.Role != session.RoleAssistant ||
+		!strings.Contains(turn1.Content, "[Tool: Read") {
+		t.Errorf("line[3] turn = %+v ok=%v", turn1, ok)
 	}
-	if chat.History[2].Role != "user" {
-		t.Errorf("msg[2].role = %q, want user (system mapped)", chat.History[2].Role)
-	}
-	if !strings.HasPrefix(chat.History[2].Parts[0].Text, "[System] ") {
-		t.Errorf("msg[2] missing [System] prefix: %s", chat.History[2].Parts[0].Text)
+	turn2, ok := chatLineToTurn(lines[5])
+	if !ok || turn2.Role != session.RoleUser ||
+		!strings.HasPrefix(turn2.Content, "[System] ") {
+		t.Errorf("line[5] turn = %+v ok=%v", turn2, ok)
 	}
 
 	// Verify ListSessions finds the injected session.
@@ -441,27 +435,27 @@ func TestInjectSession(t *testing.T) {
 	}
 	found := false
 	for _, s := range sessions {
-		if s.NativeID == tag {
+		if s.NativeID == sessionID {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("ListSessions() did not return injected session %q", tag)
+		t.Errorf("ListSessions() did not return injected session %q", sessionID)
 	}
 
 	// Verify GetSession finds it.
-	s, err := a.GetSession(tag)
+	s, err := a.GetSession(sessionID)
 	if err != nil {
-		t.Fatalf("GetSession(%q) error: %v", tag, err)
+		t.Fatalf("GetSession(%q) error: %v", sessionID, err)
 	}
-	if s.NativeID != tag || s.CLI != uxp.CLIGemini {
+	if s.NativeID != sessionID || s.CLI != uxp.CLIGemini {
 		t.Errorf("GetSession() = %+v", s)
 	}
 
 	// Verify StreamTurns reads back the parts-based format.
-	ch, err := a.StreamTurns(tag)
+	ch, err := a.StreamTurns(sessionID)
 	if err != nil {
-		t.Fatalf("StreamTurns(%q) error: %v", tag, err)
+		t.Fatalf("StreamTurns(%q) error: %v", sessionID, err)
 	}
 	var readBack []session.Turn
 	for turn := range ch {

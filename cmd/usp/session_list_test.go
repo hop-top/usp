@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"hop.top/kit/go/console/output"
+	"hop.top/kit/go/core/projects"
 	"hop.top/kit/go/core/uxp"
 	"hop.top/usp/internal/api"
 	"hop.top/usp/session"
@@ -95,6 +98,7 @@ func TestRelativeTime(t *testing.T) {
 }
 
 func TestToItemRowsDefaultColumns(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	items := []api.SessionListItem{{
 		Session: session.Session{
 			ID:         "sess_abcdefghijklmnopqrstuvwxyz",
@@ -121,6 +125,34 @@ func TestToItemRowsDefaultColumns(t *testing.T) {
 	}
 	if rows[0].Actions != "implemented list projection" {
 		t.Fatalf("Actions = %q", rows[0].Actions)
+	}
+}
+
+func TestToItemRowsUsesKitProjectRegistryName(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root := t.TempDir()
+	sessionCWD := filepath.Join(root, "hops", "main")
+	if err := os.MkdirAll(sessionCWD, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := projects.Write("usp-real", projects.Entry{Path: root}); err != nil {
+		t.Fatalf("projects.Write: %v", err)
+	}
+
+	rows := toItemRows([]api.SessionListItem{{
+		Session: session.Session{
+			ID:         "sess_abcdefghijklmnopqrstuvwxyz",
+			CLI:        uxp.CLICodex,
+			ProjectCwd: sessionCWD,
+			StartedAt:  time.Now(),
+		},
+	}}, output.Table)
+
+	if len(rows) != 1 {
+		t.Fatalf("rows len = %d, want 1", len(rows))
+	}
+	if rows[0].Project != "usp-real" {
+		t.Fatalf("Project = %q, want kit project registry name", rows[0].Project)
 	}
 }
 

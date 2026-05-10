@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"hop.top/kit/go/console/output"
+	"hop.top/kit/go/core/projects"
 	"hop.top/usp/internal/api"
 	"hop.top/usp/internal/sessionutil"
 	"hop.top/usp/session"
@@ -253,6 +254,10 @@ func toItemRows(items []api.SessionListItem, format output.Format) []sessionRow 
 	for i, item := range items {
 		ids[i] = item.Session.ID
 	}
+	var projectLabels projectLabelResolver
+	if format == output.Table {
+		projectLabels = newProjectLabelResolver()
+	}
 	rows := make([]sessionRow, len(items))
 	for i, item := range items {
 		s := item.Session
@@ -261,7 +266,7 @@ func toItemRows(items []api.SessionListItem, format output.Format) []sessionRow 
 		started := s.StartedAt.UTC().Format(time.RFC3339)
 		if format == output.Table {
 			id = queryableID(s.ID, ids)
-			project = projectName(s.ProjectCwd)
+			project = projectLabels.Label(s.ProjectCwd)
 			started = relativeTime(s.StartedAt)
 		}
 		rows[i] = sessionRow{
@@ -300,6 +305,85 @@ func queryableID(id string, all []string) string {
 		}
 	}
 	return id
+}
+
+type projectLabelResolver struct {
+	entries []projectLabelEntry
+}
+
+type projectLabelEntry struct {
+	name string
+	path string
+}
+
+func newProjectLabelResolver() projectLabelResolver {
+	file, err := projects.Read()
+	if err != nil || len(file.Projects) == 0 {
+		return projectLabelResolver{}
+	}
+	entries := make([]projectLabelEntry, 0, len(file.Projects))
+	for name, entry := range file.Projects {
+		if name == "" || entry.Path == "" {
+			continue
+		}
+		entries = append(entries, projectLabelEntry{
+			name: name,
+			path: cleanProjectPath(entry.Path),
+		})
+	}
+	return projectLabelResolver{entries: entries}
+}
+
+func (r projectLabelResolver) Label(path string) string {
+	if path == "" {
+		return ""
+	}
+	clean := cleanProjectPath(path)
+	var (
+		bestName string
+		bestLen  int
+	)
+	for _, entry := range r.entries {
+		if entry.path == "" || !projectPathContains(entry.path, clean) {
+			continue
+		}
+		if len(entry.path) > bestLen {
+			bestName = entry.name
+			bestLen = len(entry.path)
+		}
+	}
+	if bestName != "" {
+		return bestName
+	}
+	return projectName(path)
+}
+
+func cleanProjectPath(path string) string {
+	if path == "" {
+		return ""
+	}
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
+	path = filepath.Clean(path)
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		return filepath.Clean(real)
+	}
+	return path
+}
+
+func projectPathContains(root, path string) bool {
+	if root == "" || path == "" {
+		return false
+	}
+	if root == path {
+		return true
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func sourceLabel(cliName any, format output.Format) string {

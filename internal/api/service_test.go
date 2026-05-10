@@ -171,6 +171,46 @@ func TestListSkillEventsUnsupportedAdapter(t *testing.T) {
 	}
 }
 
+func TestListToolEventsStreamsAndFilters(t *testing.T) {
+	started := time.Date(2026, 5, 9, 12, 0, 0, 0, time.UTC)
+	a := &fakeAdapter{
+		sessions: []session.Session{
+			mkSession("sess_canonical", "native-session", uxp.CLICodex, started),
+		},
+		turns: []session.Turn{{
+			Role:      session.RoleAssistant,
+			Timestamp: started.Add(time.Minute),
+			ToolCalls: []session.ToolCall{
+				{Name: "exec_command", Input: "go test ./...", Output: "ok"},
+				{Name: "apply_patch", Input: "patch", Output: "done"},
+			},
+		}},
+	}
+	svc := New(map[string]session.SessionAdapter{uxp.CLICodex: a})
+
+	got, err := svc.ListToolEvents(context.Background(), ListToolEventsRequest{
+		SessionID: "sess_canonical",
+		CLI:       uxp.CLICodex,
+		Name:      "shell.exec",
+		Category:  "exec",
+	})
+	if err != nil {
+		t.Fatalf("ListToolEvents: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListToolEvents len = %d, want 1: %+v", len(got), got)
+	}
+	if got[0].SessionID != "sess_canonical" || got[0].NativeSessionID != "native-session" {
+		t.Fatalf("session ids = %#v", got[0])
+	}
+	if got[0].Name != "exec_command" || got[0].Universal != "shell.exec" || got[0].Category != "exec" {
+		t.Fatalf("tool taxonomy = %#v", got[0])
+	}
+	if a.streamID != "native-session" {
+		t.Fatalf("StreamTurns id = %q, want native-session", a.streamID)
+	}
+}
+
 func TestResumeSessionInjectsAndRecordsLineage(t *testing.T) {
 	source := &fakeAdapter{
 		sessions: []session.Session{

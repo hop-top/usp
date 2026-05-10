@@ -199,6 +199,27 @@ func TestArgsSessionSkillsFlags(t *testing.T) {
 	}
 }
 
+func TestArgsSessionToolsFlags(t *testing.T) {
+	cmd := sessionToolsCmd()
+	stubRunE(cmd)
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+
+	for _, name := range []string{"session", "cli", "project", "name", "category", "since", "until"} {
+		if cmd.Flags().Lookup(name) == nil {
+			t.Errorf("missing flag %q", name)
+		}
+	}
+	if cmd.Flags().Lookup("tool") != nil {
+		t.Error("--tool flag should not be registered")
+	}
+
+	cmd.SetArgs([]string{"--help"})
+	if err := cmd.Execute(); err != nil {
+		t.Errorf("--help errored: %v", err)
+	}
+}
+
 func TestArgsSessionShowSkillsFlag(t *testing.T) {
 	cmd := sessionShowCmd()
 	if cmd.Flags().Lookup("skills") == nil {
@@ -232,7 +253,7 @@ func TestArgsCommandWiring(t *testing.T) {
 			for _, sub := range c.Commands() {
 				sesNames[sub.Name()] = true
 			}
-			for _, want := range []string{"list", "show", "search", "lineage", "skills"} {
+			for _, want := range []string{"list", "show", "search", "lineage", "skills", "tools"} {
 				if !sesNames[want] {
 					t.Errorf("session missing subcommand %q", want)
 				}

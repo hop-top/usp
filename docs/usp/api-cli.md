@@ -327,6 +327,79 @@ usp session show fe2eb947 --cli claude --format json
 
 ---
 
+## `usp session tools`
+
+**Purpose** — List tool calls across matching sessions, enriched with
+Kit's universal tool taxonomy.
+
+**Synopsis**
+
+```sh
+usp session tools [--session <id>] [--cli <cli>] [--project <path>] \
+  [--name <text>] [--category <category>] [--since <when>] [--until <when>] \
+  [--format <fmt>]
+```
+
+**Flags**
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--session <id>` | all | Restrict to one session by full ID or unique prefix. |
+| `--cli <cli>` | all | Restrict to one CLI. |
+| `--project <path>` | all | Restrict to a project cwd. |
+| `--name <text>` | all | Match native name, universal name, or label. |
+| `--category <category>` | all | Match taxonomy category such as `research`, `edit`, `exec`, `todo`, `task`, or `browser`. |
+| `--since <when>` | all time | Only include tool calls after this date/duration. |
+| `--until <when>` | now | Only include tool calls before this date/duration. |
+
+**Examples**
+
+```sh
+usp session tools --category edit --since 7d
+usp session tools --session sess_abc123 --format json
+usp session tools --name shell.exec --cli codex
+```
+
+**Cross-refs** — [`usp session show`](#usp-session-show) (full
+transcript), [`usp session skills`](#usp-session-skills) (skill-only
+view).
+
+---
+
+## `usp session skills`
+
+**Purpose** — List skill invocations across matching sessions.
+
+**Synopsis**
+
+```sh
+usp session skills [--session <id>] [--cli <cli>] [--project <path>] \
+  [--name <text>] [--since <when>] [--until <when>] [--format <fmt>]
+```
+
+**Flags**
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--session <id>` | all | Restrict to one session by full ID or unique prefix. |
+| `--cli <cli>` | all | Restrict to one CLI. |
+| `--project <path>` | all | Restrict to a project cwd. |
+| `--name <text>` | all | Match skill name substring. |
+| `--since <when>` | all time | Only include skill events after this date/duration. |
+| `--until <when>` | now | Only include skill events before this date/duration. |
+
+**Examples**
+
+```sh
+usp session skills --name review
+usp session skills --session sess_abc123 --format json
+```
+
+**Cross-refs** — [`usp session tools`](#usp-session-tools) (all tool
+calls).
+
+---
+
 ## `usp session lineage`
 
 **Purpose** — Show the cross-CLI continuation chain (every CLI hop)

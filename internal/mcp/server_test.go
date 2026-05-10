@@ -37,8 +37,8 @@ func TestHandleToolsList(t *testing.T) {
 	got := marshalMap(t, resp)
 	result := got["result"].(map[string]any)
 	tools := result["tools"].([]any)
-	if len(tools) != 4 {
-		t.Fatalf("tools len = %d, want 4", len(tools))
+	if len(tools) != 5 {
+		t.Fatalf("tools len = %d, want 5", len(tools))
 	}
 	first := tools[0].(map[string]any)
 	if first["name"] != "usp_session_list" {

@@ -46,6 +46,19 @@ func tools() []map[string]any {
 				"until":   stringProp("Only include events until a date or duration."),
 			}, nil),
 		},
+		{
+			"name":        "usp_session_tools",
+			"description": "List tool calls across matching sessions.",
+			"inputSchema": objectSchema(map[string]any{
+				"session":  stringProp("Restrict to one session id or prefix."),
+				"project":  stringProp("Restrict to a project cwd."),
+				"cli":      stringProp("Restrict to one CLI."),
+				"name":     stringProp("Restrict to a tool name or universal label substring."),
+				"category": stringProp("Restrict to a universal category."),
+				"since":    stringProp("Only include events since a date or duration."),
+				"until":    stringProp("Only include events until a date or duration."),
+			}, nil),
+		},
 	}
 }
 

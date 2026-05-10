@@ -292,6 +292,169 @@ func (s *Service) ListSkillEvents(ctx context.Context, req ListSkillEventsReques
 	return out, nil
 }
 
+type ListToolEventsRequest struct {
+	SessionID string
+	CLI       string
+	Project   string
+	Name      string
+	Category  string
+	Since     time.Time
+	Until     time.Time
+}
+
+func (s *Service) ListToolEvents(ctx context.Context, req ListToolEventsRequest) ([]session.ToolEvent, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	var cached []session.ToolEvent
+	if s.cacheGet(ctx, "list-tools", req, &cached) {
+		return cached, nil
+	}
+	adapters, err := s.filteredAdapters(req.CLI)
+	if err != nil {
+		return nil, err
+	}
+
+	targets, err := s.resolveToolTargets(ctx, adapters, req)
+	if err != nil {
+		return nil, err
+	}
+
+	var out []session.ToolEvent
+	for _, t := range targets {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if !req.Since.IsZero() && t.sess.StartedAt.Before(req.Since) {
+			continue
+		}
+		if !req.Until.IsZero() && t.sess.StartedAt.After(req.Until) {
+			continue
+		}
+		events, err := s.toolEventsForSession(t.sess, t.cli, t.a)
+		if err != nil {
+			if req.SessionID != "" {
+				return nil, err
+			}
+			continue
+		}
+		for _, event := range events {
+			if !req.Since.IsZero() && event.Timestamp.Before(req.Since) {
+				continue
+			}
+			if !req.Until.IsZero() && event.Timestamp.After(req.Until) {
+				continue
+			}
+			if req.Category != "" && event.Category != strings.ToLower(strings.TrimSpace(req.Category)) {
+				continue
+			}
+			if req.Name != "" && !toolEventMatchesName(event, req.Name) {
+				continue
+			}
+			out = append(out, event)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].Timestamp.Before(out[j].Timestamp)
+	})
+	s.cachePut(ctx, "list-tools", req, out)
+	return out, nil
+}
+
+type toolTarget struct {
+	sess session.Session
+	cli  string
+	a    session.SessionAdapter
+}
+
+func (s *Service) resolveToolTargets(
+	ctx context.Context,
+	adapters map[string]session.SessionAdapter,
+	req ListToolEventsRequest,
+) ([]toolTarget, error) {
+	if req.SessionID != "" {
+		opts := sessionutil.ResolveOpts{Project: req.Project, Since: req.Since}
+		sess, cli, adapter, err := sessionutil.ResolveSessionID(
+			req.SessionID, adapters, AdapterOrder(req.SessionID), opts)
+		if err != nil {
+			return nil, err
+		}
+		return []toolTarget{{sess: *sess, cli: cli, a: adapter}}, nil
+	}
+
+	sessions := s.collectSessions(ctx, adapters, req.CLI, req.Project)
+	targets := make([]toolTarget, 0, len(sessions))
+	for _, sess := range sessions {
+		cli := string(sess.CLI)
+		adapter, ok := adapters[cli]
+		if !ok {
+			continue
+		}
+		targets = append(targets, toolTarget{sess: sess, cli: cli, a: adapter})
+	}
+	return targets, nil
+}
+
+func (s *Service) toolEventsForSession(
+	sess session.Session,
+	cli string,
+	adapter session.SessionAdapter,
+) ([]session.ToolEvent, error) {
+	ch, err := adapter.StreamTurns(sess.NativeID)
+	if err != nil {
+		return nil, fmt.Errorf("stream turns: %w", err)
+	}
+	var out []session.ToolEvent
+	for turn := range ch {
+		ts := turn.Timestamp
+		if ts.IsZero() {
+			ts = sess.StartedAt
+		}
+		for _, call := range turn.ToolCalls {
+			universal := session.UniversalToolName(sess.CLI, call.Name)
+			out = append(out, session.ToolEvent{
+				SessionID:       sess.ID,
+				NativeSessionID: sess.NativeID,
+				CLI:             cli,
+				Timestamp:       ts,
+				TurnID:          turnID(turn),
+				Name:            call.Name,
+				Universal:       universal,
+				Label:           session.UniversalToolLabel(sess.CLI, call.Name),
+				Category:        session.CategorizeUniversalTool(universal),
+				Input:           call.Input,
+				Output:          call.Output,
+			})
+		}
+	}
+	return out, nil
+}
+
+func turnID(turn session.Turn) string {
+	if turn.Metadata == nil {
+		return ""
+	}
+	for _, key := range []string{"id", "turn_id", "native_id"} {
+		if v, ok := turn.Metadata[key].(string); ok {
+			return v
+		}
+	}
+	return ""
+}
+
+func toolEventMatchesName(event session.ToolEvent, needle string) bool {
+	needle = strings.ToLower(strings.TrimSpace(needle))
+	if needle == "" {
+		return true
+	}
+	hay := strings.ToLower(strings.Join([]string{
+		event.Name,
+		event.Universal,
+		event.Label,
+	}, " "))
+	return strings.Contains(hay, needle)
+}
+
 func (s *Service) collectSessions(
 	ctx context.Context,
 	adapters map[string]session.SessionAdapter,

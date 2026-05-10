@@ -139,6 +139,16 @@ func (s *Server) callTool(ctx context.Context, raw json.RawMessage) (map[string]
 			Since:     sinceArg(args, "since"),
 			Until:     sinceArg(args, "until"),
 		})
+	case "usp_session_tools":
+		payload, err = s.service.ListToolEvents(ctx, api.ListToolEventsRequest{
+			SessionID: stringArg(args, "session"),
+			CLI:       stringArg(args, "cli"),
+			Project:   stringArg(args, "project"),
+			Name:      stringArg(args, "name"),
+			Category:  stringArg(args, "category"),
+			Since:     sinceArg(args, "since"),
+			Until:     sinceArg(args, "until"),
+		})
 	default:
 		return nil, fmt.Errorf("unknown tool %q", p.Name)
 	}

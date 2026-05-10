@@ -35,6 +35,8 @@ findings filed; 8 implemented, 1 doc-only wontfix, 2 already covered.
   store at `$XDG_CONFIG_HOME/usp/aliases.yaml`. Stored aliases are
   registered as runtime command shims so `usp <alias>` dispatches
   to the target. (T-0105)
+- `usp session tools` — lists tool calls across matching sessions,
+  enriched with Kit's universal tool taxonomy.
 - `CHANGELOG.md` — release-please-compatible structure for upcoming
   tagged releases. (T-0116)
 

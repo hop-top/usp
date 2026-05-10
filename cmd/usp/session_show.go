@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"hop.top/kit/go/console/output"
+	"hop.top/kit/go/core/uxp"
 	"hop.top/usp/internal/api"
 	"hop.top/usp/internal/sessionutil"
 	"hop.top/usp/session"
@@ -37,10 +38,39 @@ type showResult struct {
 }
 
 type showTurn struct {
-	Role      string             `json:"role"`
-	Content   string             `json:"content"`
-	Timestamp string             `json:"timestamp"`
-	ToolCalls []session.ToolCall `json:"tool_calls,omitempty"`
+	Role      string         `json:"role"`
+	Content   string         `json:"content"`
+	Timestamp string         `json:"timestamp"`
+	ToolCalls []showToolCall `json:"tool_calls,omitempty"`
+}
+
+// showToolCall enriches session.ToolCall with the universal name and
+// rendering label (from kit's ToolCapability taxonomy) so transcripts
+// stay legible across CLIs without losing the native tool name.
+type showToolCall struct {
+	Name      string `json:"name"`
+	Universal string `json:"universal,omitempty"`
+	Label     string `json:"label"`
+	Input     string `json:"input,omitempty"`
+	Output    string `json:"output,omitempty"`
+}
+
+// enrichToolCalls maps native ToolCalls to showToolCalls, attaching
+// the universal name + label from the taxonomy. CLIs without a
+// known mapping (detection-only entries, unknown native names) fall
+// back to "[native:foo]" labels.
+func enrichToolCalls(cli uxp.CLIName, calls []session.ToolCall) []showToolCall {
+	out := make([]showToolCall, len(calls))
+	for i, c := range calls {
+		out[i] = showToolCall{
+			Name:      c.Name,
+			Universal: session.UniversalToolName(cli, c.Name),
+			Label:     session.UniversalToolLabel(cli, c.Name),
+			Input:     c.Input,
+			Output:    c.Output,
+		}
+	}
+	return out
 }
 
 func sessionShowCmd() *cobra.Command {
@@ -115,13 +145,14 @@ func sessionShowCmd() *cobra.Command {
 				return err
 			}
 
+			cliName := uxp.CLIName(detail.CLI)
 			var turns []showTurn
 			for _, turn := range detail.Turns {
 				turns = append(turns, showTurn{
 					Role:      string(turn.Role),
 					Content:   turn.Content,
 					Timestamp: timestampForFormat(turn.Timestamp, fmt),
-					ToolCalls: turn.ToolCalls,
+					ToolCalls: enrichToolCalls(cliName, turn.ToolCalls),
 				})
 			}
 

@@ -18,7 +18,7 @@ func TestArgsSessionListFlags(t *testing.T) {
 	stubRunE(cmd)
 
 	// --format is inherited from the root persistent flag.
-	for _, name := range []string{"project", "tool", "since", "limit"} {
+	for _, name := range []string{"project", "cli", "since", "limit"} {
 		if cmd.Flags().Lookup(name) == nil {
 			t.Errorf("missing flag %q", name)
 		}
@@ -30,7 +30,7 @@ func TestArgsSessionListFlags(t *testing.T) {
 	if v, _ := cmd.Flags().GetString("project"); v == "" {
 		t.Error("project default should be current working directory")
 	}
-	for _, name := range []string{"tool", "since"} {
+	for _, name := range []string{"cli", "since"} {
 		if v, _ := cmd.Flags().GetString(name); v != "" {
 			t.Errorf("%s default = %q, want empty", name, v)
 		}
@@ -48,8 +48,8 @@ func TestArgsSessionShowAcceptsOptionalArg(t *testing.T) {
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
 
-	if cmd.Flags().Lookup("tool") == nil {
-		t.Error("missing --tool flag")
+	if cmd.Flags().Lookup("cli") == nil {
+		t.Error("missing --cli flag")
 	}
 	// --format is inherited from root persistent flags.
 
@@ -77,8 +77,8 @@ func TestArgsResumeFlags(t *testing.T) {
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
 
-	if cmd.Flags().Lookup("tool") == nil {
-		t.Error("missing --tool flag")
+	if cmd.Flags().Lookup("cli") == nil {
+		t.Error("missing --cli flag")
 	}
 
 	cmd.SetArgs([]string{"fake-session-id"})
@@ -105,8 +105,8 @@ func TestArgsResumeRejectsTooManyArgs(t *testing.T) {
 func TestArgsDoctorFlags(t *testing.T) {
 	cmd := doctorCmd()
 
-	if cmd.Flags().Lookup("tool") == nil {
-		t.Error("missing --tool flag")
+	if cmd.Flags().Lookup("cli") == nil {
+		t.Error("missing --cli flag")
 	}
 
 	cmd.SetArgs([]string{"--help"})
@@ -160,7 +160,7 @@ func TestArgsSessionSearchRequiresOneArg(t *testing.T) {
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
 
-	for _, name := range []string{"tool", "project", "since", "limit"} {
+	for _, name := range []string{"cli", "project", "since", "limit"} {
 		if cmd.Flags().Lookup(name) == nil {
 			t.Errorf("missing flag %q", name)
 		}
@@ -183,14 +183,13 @@ func TestArgsSessionSkillsFlags(t *testing.T) {
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
 
-	for _, name := range []string{"session", "tool", "cli", "project", "name", "since", "until"} {
+	for _, name := range []string{"session", "cli", "project", "name", "since", "until"} {
 		if cmd.Flags().Lookup(name) == nil {
 			t.Errorf("missing flag %q", name)
 		}
 	}
-	// --cli is the hidden POC-stage alias for --tool.
-	if cliFlag := cmd.Flags().Lookup("cli"); cliFlag != nil && !cliFlag.Hidden {
-		t.Error("--cli flag should be hidden (alias for --tool)")
+	if cmd.Flags().Lookup("tool") != nil {
+		t.Error("--tool flag should not be registered")
 	}
 	// --format is inherited from the root persistent flag.
 

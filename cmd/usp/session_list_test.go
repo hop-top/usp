@@ -23,7 +23,7 @@ func TestSessionListCmd_Flags(t *testing.T) {
 	}
 
 	// --format is inherited from root persistent flag.
-	for _, name := range []string{"project", "tool", "since", "limit"} {
+	for _, name := range []string{"project", "cli", "since", "limit"} {
 		if cmd.Flags().Lookup(name) == nil {
 			t.Errorf("missing flag %q", name)
 		}

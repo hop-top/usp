@@ -84,7 +84,7 @@ func sessionShowCmd() *cobra.Command {
 				selected, err := promptSelectSessionID(c.Context(), svc,
 					api.ListSessionsRequest{
 						Project: pickerProject,
-						Tool:    cliFlag,
+						CLI:     cliFlag,
 						Since:   sinceT,
 					},
 					"Choose session to show",
@@ -102,7 +102,7 @@ func sessionShowCmd() *cobra.Command {
 					c.Context(),
 					api.ShowSessionRequest{
 						ID:            id,
-						Tool:          cliFlag,
+						CLI:           cliFlag,
 						Project:       project,
 						Since:         sinceT,
 						IncludeSkills: showSkills,
@@ -151,7 +151,7 @@ func sessionShowCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&cliFlag, "tool", "", "Restrict search to a specific CLI")
+	addCLIFlag(cmd, &cliFlag, "Restrict search to a specific CLI")
 	cmd.Flags().StringVar(&project, "project", "",
 		"Narrow prefix match to project dir")
 	cmd.Flags().StringVar(&since, "since", "",

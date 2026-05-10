@@ -13,12 +13,12 @@ import (
 
 type stubAdapter struct{ cli uxp.CLIName }
 
-func (s *stubAdapter) CLI() uxp.CLIName                               { return s.cli }
+func (s *stubAdapter) CLI() uxp.CLIName                                { return s.cli }
 func (s *stubAdapter) ProjectKey(string) string                        { return "" }
-func (s *stubAdapter) Detect() (*uxp.DetectResult, error)             { return nil, nil }
-func (s *stubAdapter) Capabilities() uxp.CapabilityMap                { return nil }
-func (s *stubAdapter) ListSessions(string) ([]session.Session, error) { return nil, nil }
-func (s *stubAdapter) GetSession(string) (*session.Session, error)    { return nil, nil }
+func (s *stubAdapter) Detect() (*uxp.DetectResult, error)              { return nil, nil }
+func (s *stubAdapter) Capabilities() uxp.CapabilityMap                 { return nil }
+func (s *stubAdapter) ListSessions(string) ([]session.Session, error)  { return nil, nil }
+func (s *stubAdapter) GetSession(string) (*session.Session, error)     { return nil, nil }
 func (s *stubAdapter) StreamTurns(string) (<-chan session.Turn, error) { return nil, nil }
 
 func mkSession(

@@ -66,7 +66,7 @@ func DefaultAdapters() map[string]session.SessionAdapter {
 
 type ListSessionsRequest struct {
 	Project string
-	Tool    string
+	CLI     string
 	Since   time.Time
 	Limit   int
 }
@@ -75,11 +75,11 @@ func (s *Service) ListSessions(ctx context.Context, req ListSessionsRequest) ([]
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	adapters, err := s.filteredAdapters(req.Tool)
+	adapters, err := s.filteredAdapters(req.CLI)
 	if err != nil {
 		return nil, err
 	}
-	all := s.collectSessions(ctx, adapters, req.Tool, req.Project)
+	all := s.collectSessions(ctx, adapters, req.CLI, req.Project)
 	all = sessionutil.FilterSince(all, req.Since)
 	all = sessionutil.SortAndLimit(all, req.Limit)
 	return all, nil
@@ -87,7 +87,7 @@ func (s *Service) ListSessions(ctx context.Context, req ListSessionsRequest) ([]
 
 type SearchSessionsRequest struct {
 	Project string
-	Tool    string
+	CLI     string
 	Query   string
 	Since   time.Time
 	Limit   int
@@ -97,12 +97,12 @@ func (s *Service) SearchSessions(ctx context.Context, req SearchSessionsRequest)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	adapters, err := s.filteredAdapters(req.Tool)
+	adapters, err := s.filteredAdapters(req.CLI)
 	if err != nil {
 		return nil, err
 	}
 
-	all := s.collectSessions(ctx, adapters, req.Tool, req.Project)
+	all := s.collectSessions(ctx, adapters, req.CLI, req.Project)
 	all = sessionutil.FilterSince(all, req.Since)
 
 	needle := strings.ToLower(req.Query)
@@ -135,7 +135,7 @@ func (s *Service) SearchSessions(ctx context.Context, req SearchSessionsRequest)
 
 type ShowSessionRequest struct {
 	ID            string
-	Tool          string
+	CLI           string
 	Project       string
 	Since         time.Time
 	IncludeSkills bool
@@ -156,7 +156,7 @@ func (s *Service) ShowSession(ctx context.Context, req ShowSessionRequest) (*Ses
 	if s.cacheGet(ctx, "show-session", req, &cached) {
 		return &cached, nil
 	}
-	adapters, err := s.filteredAdapters(req.Tool)
+	adapters, err := s.filteredAdapters(req.CLI)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +195,7 @@ func (s *Service) ShowSession(ctx context.Context, req ShowSessionRequest) (*Ses
 
 type ListSkillEventsRequest struct {
 	SessionID string
-	Tool      string
+	CLI       string
 	Project   string
 	Name      string
 	Since     time.Time
@@ -210,7 +210,7 @@ func (s *Service) ListSkillEvents(ctx context.Context, req ListSkillEventsReques
 	if s.cacheGet(ctx, "list-skills", req, &cached) {
 		return cached, nil
 	}
-	adapters, err := s.filteredAdapters(req.Tool)
+	adapters, err := s.filteredAdapters(req.CLI)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +231,7 @@ func (s *Service) ListSkillEvents(ctx context.Context, req ListSkillEventsReques
 		}
 		targets = append(targets, target{sess: *sess, cli: cli, a: adapter})
 	} else {
-		sessions := s.collectSessions(ctx, adapters, req.Tool, req.Project)
+		sessions := s.collectSessions(ctx, adapters, req.CLI, req.Project)
 		for _, sess := range sessions {
 			cli := string(sess.CLI)
 			adapter, ok := adapters[cli]
@@ -295,13 +295,13 @@ func (s *Service) ListSkillEvents(ctx context.Context, req ListSkillEventsReques
 func (s *Service) collectSessions(
 	ctx context.Context,
 	adapters map[string]session.SessionAdapter,
-	tool string,
+	cliName string,
 	project string,
 ) []session.Session {
 	req := struct {
-		Tool    string `json:"tool"`
+		CLI     string `json:"cli"`
 		Project string `json:"project"`
-	}{Tool: tool, Project: project}
+	}{CLI: cliName, Project: project}
 	var cached []session.Session
 	if s.cacheGet(ctx, "collect-sessions", req, &cached) {
 		return cached
@@ -311,10 +311,10 @@ func (s *Service) collectSessions(
 	return all
 }
 
-func (s *Service) filteredAdapters(tool string) (map[string]session.SessionAdapter, error) {
-	adapters := sessionutil.FilterAdapters(s.adapters, tool)
+func (s *Service) filteredAdapters(cliName string) (map[string]session.SessionAdapter, error) {
+	adapters := sessionutil.FilterAdapters(s.adapters, cliName)
 	if adapters == nil {
-		return nil, fmt.Errorf("unknown CLI %q", tool)
+		return nil, fmt.Errorf("unknown CLI %q", cliName)
 	}
 	return adapters, nil
 }

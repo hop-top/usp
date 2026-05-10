@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"hop.top/usp/internal/sessionutil"
 	"hop.top/usp/internal/api"
+	"hop.top/usp/internal/sessionutil"
 )
 
 const protocolVersion = "2024-11-05"
@@ -102,7 +102,7 @@ func (s *Server) callTool(ctx context.Context, raw json.RawMessage) (map[string]
 	case "usp_session_list":
 		payload, err = s.service.ListSessions(ctx, api.ListSessionsRequest{
 			Project: stringArg(args, "project"),
-			Tool:    stringArg(args, "tool"),
+			CLI:     stringArg(args, "cli"),
 			Since:   sinceArg(args, "since"),
 			Limit:   intArg(args, "limit", 20),
 		})
@@ -113,7 +113,7 @@ func (s *Server) callTool(ctx context.Context, raw json.RawMessage) (map[string]
 		}
 		payload, err = s.service.SearchSessions(ctx, api.SearchSessionsRequest{
 			Project: stringArg(args, "project"),
-			Tool:    stringArg(args, "tool"),
+			CLI:     stringArg(args, "cli"),
 			Query:   query,
 			Since:   sinceArg(args, "since"),
 			Limit:   intArg(args, "limit", 20),
@@ -125,7 +125,7 @@ func (s *Server) callTool(ctx context.Context, raw json.RawMessage) (map[string]
 		}
 		payload, err = s.service.ShowSession(ctx, api.ShowSessionRequest{
 			ID:            id,
-			Tool:          stringArg(args, "tool"),
+			CLI:           stringArg(args, "cli"),
 			Project:       stringArg(args, "project"),
 			Since:         sinceArg(args, "since"),
 			IncludeSkills: boolArg(args, "include_skills"),
@@ -133,7 +133,7 @@ func (s *Server) callTool(ctx context.Context, raw json.RawMessage) (map[string]
 	case "usp_session_skills":
 		payload, err = s.service.ListSkillEvents(ctx, api.ListSkillEventsRequest{
 			SessionID: stringArg(args, "session"),
-			Tool:      stringArg(args, "tool"),
+			CLI:       stringArg(args, "cli"),
 			Project:   stringArg(args, "project"),
 			Name:      stringArg(args, "name"),
 			Since:     sinceArg(args, "since"),

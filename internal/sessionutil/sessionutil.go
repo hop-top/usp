@@ -40,19 +40,19 @@ func SortAndLimit(ss []session.Session, limit int) []session.Session {
 	return ss
 }
 
-// FilterAdapters returns only the named adapter, or all if tool
-// is empty. Returns nil if tool is not found.
+// FilterAdapters returns only the named CLI adapter, or all if cliName
+// is empty. Returns nil if cliName is not found.
 func FilterAdapters(
-	all map[string]session.SessionAdapter, tool string,
+	all map[string]session.SessionAdapter, cliName string,
 ) map[string]session.SessionAdapter {
-	if tool == "" {
+	if cliName == "" {
 		return all
 	}
-	a, ok := all[tool]
+	a, ok := all[cliName]
 	if !ok {
 		return nil
 	}
-	return map[string]session.SessionAdapter{tool: a}
+	return map[string]session.SessionAdapter{cliName: a}
 }
 
 // CollectSessions fans out to all adapters and merges results.

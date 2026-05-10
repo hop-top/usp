@@ -14,8 +14,8 @@ func TestDefaultConfig(t *testing.T) {
 	if c.DefaultLimit != 20 {
 		t.Errorf("DefaultLimit = %d, want 20", c.DefaultLimit)
 	}
-	if c.DefaultTool != "" {
-		t.Errorf("DefaultTool = %q, want empty", c.DefaultTool)
+	if c.DefaultCLI != "" {
+		t.Errorf("DefaultCLI = %q, want empty", c.DefaultCLI)
 	}
 	if c.CacheTTL != "10m" {
 		t.Errorf("CacheTTL = %q, want 10m", c.CacheTTL)
@@ -23,20 +23,20 @@ func TestDefaultConfig(t *testing.T) {
 }
 
 func TestMergeConfigSkipsZero(t *testing.T) {
-	dst := Config{DefaultTool: "claude", DefaultLimit: 50, CacheTTL: "1m"}
+	dst := Config{DefaultCLI: "claude", DefaultLimit: 50, CacheTTL: "1m"}
 	src := Config{}
 	mergeConfig(&dst, &src)
-	if dst.DefaultTool != "claude" || dst.DefaultLimit != 50 || dst.CacheTTL != "1m" {
+	if dst.DefaultCLI != "claude" || dst.DefaultLimit != 50 || dst.CacheTTL != "1m" {
 		t.Errorf("merge zero src clobbered dst: %+v", dst)
 	}
 }
 
 func TestMergeConfigOverwritesNonZero(t *testing.T) {
-	dst := Config{DefaultTool: "claude", DefaultLimit: 20, CacheTTL: "10m"}
-	src := Config{DefaultTool: "codex", DefaultLimit: 50, CacheTTL: "1m"}
+	dst := Config{DefaultCLI: "claude", DefaultLimit: 20, CacheTTL: "10m"}
+	src := Config{DefaultCLI: "codex", DefaultLimit: 50, CacheTTL: "1m"}
 	mergeConfig(&dst, &src)
-	if dst.DefaultTool != "codex" {
-		t.Errorf("DefaultTool = %q, want codex", dst.DefaultTool)
+	if dst.DefaultCLI != "codex" {
+		t.Errorf("DefaultCLI = %q, want codex", dst.DefaultCLI)
 	}
 	if dst.DefaultLimit != 50 {
 		t.Errorf("DefaultLimit = %d, want 50", dst.DefaultLimit)
@@ -49,7 +49,7 @@ func TestMergeConfigOverwritesNonZero(t *testing.T) {
 func TestLoadConfigFromProjectFile(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, ".usp.yaml")
-	body := []byte("default_limit: 5\ndefault_tool: codex\ncache_ttl: 1m\n")
+	body := []byte("default_limit: 5\ndefault_cli: codex\ncache_ttl: 1m\n")
 	if err := os.WriteFile(cfgPath, body, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -67,8 +67,8 @@ func TestLoadConfigFromProjectFile(t *testing.T) {
 	if cfg.DefaultLimit != 5 {
 		t.Errorf("DefaultLimit = %d, want 5", cfg.DefaultLimit)
 	}
-	if cfg.DefaultTool != "codex" {
-		t.Errorf("DefaultTool = %q, want codex", cfg.DefaultTool)
+	if cfg.DefaultCLI != "codex" {
+		t.Errorf("DefaultCLI = %q, want codex", cfg.DefaultCLI)
 	}
 	if cfg.CacheTTL != "1m" {
 		t.Errorf("CacheTTL = %q, want 1m", cfg.CacheTTL)

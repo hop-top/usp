@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# E2E: session list filter tests (--tool, --project, --limit, --since, compound)
+# E2E: session list filter tests (--cli, --project, --limit, --since, compound)
 set -euo pipefail
 
 PASS=0; FAIL=0
@@ -69,15 +69,15 @@ json_len() {
   echo "$raw" | jq 'length' 2>/dev/null || echo "0"
 }
 
-# ── --tool filter ───────────────────────────────────────────────────
+# ── --cli filter ───────────────────────────────────────────────────
 
-result=$(usp session list --tool claude --format json 2>/dev/null || echo "[]")
+result=$(usp session list --cli claude --format json 2>/dev/null || echo "[]")
 count=$(json_len "$result")
-assert_eq "$count" "1" "--tool claude returns 1 session"
+assert_eq "$count" "1" "--cli claude returns 1 session"
 
-result=$(usp session list --tool codex --format json 2>/dev/null || echo "[]")
+result=$(usp session list --cli codex --format json 2>/dev/null || echo "[]")
 count=$(json_len "$result")
-assert_eq "$count" "1" "--tool codex returns 1 session"
+assert_eq "$count" "1" "--cli codex returns 1 session"
 
 # ── --project filter ────────────────────────────────────────────────
 
@@ -109,19 +109,19 @@ result=$(usp session list --since 1m --format json 2>/dev/null || echo "[]")
 count=$(json_len "$result")
 assert_eq "$count" "4" "--since 1m returns all 4 recent sessions"
 
-# ── Compound: --tool + --project ────────────────────────────────────
+# ── Compound: --cli + --project ────────────────────────────────────
 
-result=$(usp session list --tool claude --project "$PROJECT_A" --format json 2>/dev/null || echo "[]")
+result=$(usp session list --cli claude --project "$PROJECT_A" --format json 2>/dev/null || echo "[]")
 count=$(json_len "$result")
-assert_eq "$count" "1" "--tool claude + --project project-a = 1"
+assert_eq "$count" "1" "--cli claude + --project project-a = 1"
 
-result=$(usp session list --tool claude --project "$PROJECT_B" --format json 2>/dev/null || echo "[]")
+result=$(usp session list --cli claude --project "$PROJECT_B" --format json 2>/dev/null || echo "[]")
 count=$(json_len "$result")
-assert_eq "$count" "0" "--tool claude + --project project-b = 0"
+assert_eq "$count" "0" "--cli claude + --project project-b = 0"
 
-result=$(usp session list --tool codex --project "$PROJECT_B" --format json 2>/dev/null || echo "[]")
+result=$(usp session list --cli codex --project "$PROJECT_B" --format json 2>/dev/null || echo "[]")
 count=$(json_len "$result")
-assert_eq "$count" "1" "--tool codex + --project project-b = 1"
+assert_eq "$count" "1" "--cli codex + --project project-b = 1"
 
 # ── Summary ─────────────────────────────────────────────────────────
 

@@ -21,7 +21,7 @@ func TestListSessionsFiltersSortsAndLimits(t *testing.T) {
 	})
 
 	got, err := svc.ListSessions(context.Background(), ListSessionsRequest{
-		Tool:  uxp.CLICodex,
+		CLI:   uxp.CLICodex,
 		Since: t1.Add(30 * time.Minute),
 		Limit: 1,
 	})
@@ -49,7 +49,7 @@ func TestListSessionsUsesKitCache(t *testing.T) {
 	}, WithCache(cache))
 
 	first, err := svc.ListSessions(context.Background(), ListSessionsRequest{
-		Tool: uxp.CLICodex,
+		CLI: uxp.CLICodex,
 	})
 	if err != nil {
 		t.Fatalf("ListSessions first: %v", err)
@@ -58,7 +58,7 @@ func TestListSessionsUsesKitCache(t *testing.T) {
 		mkSession("fresh", "native-fresh", uxp.CLICodex, time.Now()),
 	}
 	second, err := svc.ListSessions(context.Background(), ListSessionsRequest{
-		Tool: uxp.CLICodex,
+		CLI: uxp.CLICodex,
 	})
 	if err != nil {
 		t.Fatalf("ListSessions second: %v", err)
@@ -78,7 +78,7 @@ func TestSearchSessionsStreamsNativeID(t *testing.T) {
 	svc := New(map[string]session.SessionAdapter{uxp.CLICodex: a})
 
 	got, err := svc.SearchSessions(context.Background(), SearchSessionsRequest{
-		Tool:  uxp.CLICodex,
+		CLI:   uxp.CLICodex,
 		Query: "needle",
 	})
 	if err != nil {
@@ -105,7 +105,7 @@ func TestListSessionItemsSummarizesTurns(t *testing.T) {
 	svc := New(map[string]session.SessionAdapter{uxp.CLICodex: a})
 
 	got, err := svc.ListSessionItems(context.Background(), ListSessionsRequest{
-		Tool: uxp.CLICodex,
+		CLI: uxp.CLICodex,
 	})
 	if err != nil {
 		t.Fatalf("ListSessionItems: %v", err)
@@ -133,7 +133,7 @@ func TestShowSessionReturnsDetail(t *testing.T) {
 
 	got, err := svc.ShowSession(context.Background(), ShowSessionRequest{
 		ID:            "sess_canonical",
-		Tool:          uxp.CLICodex,
+		CLI:           uxp.CLICodex,
 		IncludeSkills: true,
 	})
 	if err != nil {
@@ -159,7 +159,7 @@ func TestListSkillEventsUnsupportedAdapter(t *testing.T) {
 	})
 
 	got, err := svc.ListSkillEvents(context.Background(), ListSkillEventsRequest{
-		Tool:  uxp.CLICodex,
+		CLI:   uxp.CLICodex,
 		Since: started.Add(-time.Minute),
 		Until: started.Add(time.Minute),
 	})
@@ -186,7 +186,7 @@ func TestResumeSessionInjectsAndRecordsLineage(t *testing.T) {
 
 	got, err := svc.ResumeSession(context.Background(), ResumeSessionRequest{
 		ID:          "sess_source",
-		TargetTool:  uxp.CLIClaude,
+		TargetCLI:   uxp.CLIClaude,
 		ProjectCWD:  "/tmp/project",
 		LineagePath: t.TempDir() + "/sessions.db",
 	})

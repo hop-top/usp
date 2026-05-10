@@ -45,7 +45,7 @@ progress so subsequent runs only ingest new sessions.
 go install hop.top/usp/cmd/usp-ctxt@latest
 
 usp-ctxt sync                        # walk all CLIs since last run
-usp-ctxt sync --tool claude          # only Claude Code sessions
+usp-ctxt sync --cli claude          # only Claude Code sessions
 usp-ctxt sync --project ~/code/myapp # only sessions in this project
 usp-ctxt sync --dry-run              # project + log; do not write
 ```
@@ -68,11 +68,11 @@ claude
 # ... work on auth feature, exit
 
 # Resume the same conversation in Codex
-usp resume --tool codex
+usp resume --cli codex
 # Codex picks up with full conversation context
 
 # Resume again in Gemini
-usp resume --tool gemini
+usp resume --cli gemini
 # Gemini continues where Codex left off
 
 # See the full lineage
@@ -130,7 +130,7 @@ usp session show <id> --skills  # detail + skill invocations
 usp session search auth  # find sessions mentioning "auth"
 usp session skills --name review  # every session that fired the review skill
 
-usp resume --tool codex        # resume last session in Codex
+usp resume --cli codex        # resume last session in Codex
 usp session lineage <id>      # cross-CLI conversation history
 ```
 
@@ -140,7 +140,7 @@ for the `session skills` data model + adapter contract.
 ### Flags
 
 ```sh
---tool claude            # narrow to one assistant
+--cli claude            # narrow to one assistant
 --project /path/to/x     # explicit working directory
 --since 7d               # sessions from the last 7 days
 --limit 10               # cap results

@@ -41,7 +41,7 @@ func syncCmd() *cobra.Command {
 		ctxtServer  string
 		dryRun      bool
 		perTimeout  int
-		toolFilter  string
+		cliFilter   string
 		projectFlag string
 		verboseFlag bool
 	)
@@ -65,7 +65,7 @@ func syncCmd() *cobra.Command {
 				ctxtServer:  ctxtServer,
 				dryRun:      dryRun,
 				perTimeout:  perTimeout,
-				toolFilter:  toolFilter,
+				cliFilter:   cliFilter,
 				projectFlag: projectFlag,
 				verbose:     verboseFlag,
 			}, os.Stderr, os.Stdout)
@@ -81,7 +81,7 @@ func syncCmd() *cobra.Command {
 		"Project + log; do not invoke ctxt or update state")
 	cmd.Flags().IntVar(&perTimeout, "per-call-timeout", 30,
 		"Per ctxt invocation timeout in seconds")
-	cmd.Flags().StringVar(&toolFilter, "tool", "",
+	cmd.Flags().StringVar(&cliFilter, "cli", "",
 		"Restrict to one CLI (claude, codex, gemini, opencode)")
 	cmd.Flags().StringVar(&projectFlag, "project", "",
 		"Restrict to a project cwd")

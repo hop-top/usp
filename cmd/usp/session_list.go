@@ -35,7 +35,7 @@ type sessionRow struct {
 func sessionListCmd() *cobra.Command {
 	var (
 		project = defaultListProject()
-		tool    string
+		cliName string
 		since   string
 		limit   int
 	)
@@ -46,8 +46,8 @@ func sessionListCmd() *cobra.Command {
 		RunE: func(c *cobra.Command, _ []string) error {
 			format := formatFromViper()
 			// Honor config defaults when flags weren't explicitly set.
-			if !c.Flags().Changed("tool") && tool == "" {
-				tool = rootViper.GetString("default_tool")
+			if !cliFlagChanged(c) && cliName == "" {
+				cliName = rootViper.GetString("default_cli")
 			}
 			if !c.Flags().Changed("limit") {
 				if v := rootViper.GetInt("default_limit"); v > 0 {
@@ -74,7 +74,7 @@ func sessionListCmd() *cobra.Command {
 			var items []api.SessionListItem
 			req := api.ListSessionsRequest{
 				Project: project,
-				Tool:    tool,
+				CLI:     cliName,
 				Since:   sinceTime,
 				Limit:   limit,
 			}
@@ -103,7 +103,7 @@ func sessionListCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&project, "project", project,
 		"Filter to project dir (default: current directory; falls back to all projects)")
-	cmd.Flags().StringVar(&tool, "tool", "",
+	addCLIFlag(cmd, &cliName,
 		"Filter to a specific CLI (claude, codex, gemini, opencode)")
 	cmd.Flags().StringVar(&since, "since", "",
 		"Show sessions since date (e.g. 2026-04-01, 7d, 24h)")
@@ -165,7 +165,7 @@ func defaultListProject() string {
 func sessionSearchCmd() *cobra.Command {
 	var (
 		project string
-		tool    string
+		cliName string
 		since   string
 		limit   int
 	)
@@ -178,8 +178,8 @@ func sessionSearchCmd() *cobra.Command {
 			format := formatFromViper()
 			query := strings.ToLower(args[0])
 
-			if !c.Flags().Changed("tool") && tool == "" {
-				tool = rootViper.GetString("default_tool")
+			if !cliFlagChanged(c) && cliName == "" {
+				cliName = rootViper.GetString("default_cli")
 			}
 			if !c.Flags().Changed("limit") {
 				if v := rootViper.GetInt("default_limit"); v > 0 {
@@ -204,7 +204,7 @@ func sessionSearchCmd() *cobra.Command {
 					c.Context(),
 					api.SearchSessionsRequest{
 						Project: project,
-						Tool:    tool,
+						CLI:     cliName,
 						Query:   query,
 						Since:   sinceTime,
 						Limit:   limit,
@@ -228,8 +228,7 @@ func sessionSearchCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&project, "project", "",
 		"Filter to project dir (default: all projects)")
-	cmd.Flags().StringVar(&tool, "tool", "",
-		"Filter to a specific CLI")
+	addCLIFlag(cmd, &cliName, "Filter to a specific CLI")
 	cmd.Flags().StringVar(&since, "since", "",
 		"Search sessions since date (e.g. 2026-04-01, 7d, 24h)")
 	cmd.Flags().IntVar(&limit, "limit", 20,

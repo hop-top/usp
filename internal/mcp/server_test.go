@@ -63,7 +63,7 @@ func TestHandleToolCallSessionList(t *testing.T) {
 		"jsonrpc":"2.0",
 		"id":2,
 		"method":"tools/call",
-		"params":{"name":"usp_session_list","arguments":{"tool":"codex","limit":1}}
+		"params":{"name":"usp_session_list","arguments":{"cli":"codex","limit":1}}
 	}`))
 	if !ok {
 		t.Fatal("expected response")

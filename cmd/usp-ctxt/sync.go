@@ -24,7 +24,7 @@ type syncParams struct {
 	ctxtServer  string
 	dryRun      bool
 	perTimeout  int
-	toolFilter  string
+	cliFilter   string
 	projectFlag string
 	verbose     bool
 }
@@ -37,7 +37,7 @@ func runSync(ctx context.Context, p syncParams, errw, outw io.Writer) error {
 		return err
 	}
 
-	src := newAdapterSource(p.toolFilter, p.projectFlag)
+	src := newAdapterSource(p.cliFilter, p.projectFlag)
 
 	var client uspctxt.CtxtClient = uspctxt.NewExecClient(p.ctxtServer)
 	if p.dryRun {
@@ -81,7 +81,7 @@ type adapterSource struct {
 	nativeByID map[string]string
 }
 
-func newAdapterSource(toolFilter, project string) *adapterSource {
+func newAdapterSource(cliFilter, project string) *adapterSource {
 	all := map[string]session.SessionAdapter{
 		uxp.CLIClaude:   claude.New(),
 		uxp.CLICodex:    &codex.Adapter{},
@@ -89,10 +89,10 @@ func newAdapterSource(toolFilter, project string) *adapterSource {
 		uxp.CLIGemini:   &gemini.Adapter{},
 	}
 	clis := []string{uxp.CLIClaude, uxp.CLICodex, uxp.CLIOpenCode, uxp.CLIGemini}
-	if toolFilter != "" {
-		if _, ok := all[toolFilter]; ok {
-			all = map[string]session.SessionAdapter{toolFilter: all[toolFilter]}
-			clis = []string{toolFilter}
+	if cliFilter != "" {
+		if _, ok := all[cliFilter]; ok {
+			all = map[string]session.SessionAdapter{cliFilter: all[cliFilter]}
+			clis = []string{cliFilter}
 		} else {
 			// unknown filter — empty source produces no work
 			all = map[string]session.SessionAdapter{}

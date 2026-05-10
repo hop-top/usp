@@ -191,7 +191,7 @@ func TestSessionShow_ToolCallBoundaries(t *testing.T) {
 		{
 			"uuid": "t1", "type": "user",
 			"timestamp": "2026-04-11T09:00:00Z",
-			"cwd": fixtureCwd, "sessionId": "show-tool-sess",
+			"cwd":       fixtureCwd, "sessionId": "show-tool-sess",
 			"message": map[string]any{
 				"role":    "user",
 				"content": "list files",
@@ -399,7 +399,7 @@ func TestSessionShow_NonExistentID(t *testing.T) {
 
 // TestSessionShow_CrossCliDisambiguation verifies that a session ID
 // present in both Claude and Codex can be disambiguated by passing
-// the --tool flag (US-0004 AC4).
+// the --cli flag (US-0004 AC4).
 func TestSessionShow_CrossCliDisambiguation(t *testing.T) {
 	home := t.TempDir()
 
@@ -411,7 +411,7 @@ func TestSessionShow_CrossCliDisambiguation(t *testing.T) {
 		{
 			"uuid": "sid1", "type": "user",
 			"timestamp": "2026-04-12T10:00:00Z",
-			"cwd": fixtureCwd, "sessionId": "shared-id-sess",
+			"cwd":       fixtureCwd, "sessionId": "shared-id-sess",
 			"message": map[string]any{
 				"role":    "user",
 				"content": "from claude side",
@@ -454,7 +454,7 @@ func TestSessionShow_CrossCliDisambiguation(t *testing.T) {
 		},
 	})
 
-	// Disambiguate by restricting to Claude only (--tool claude).
+	// Disambiguate by restricting to Claude only (--cli claude).
 	claudeOnly := map[string]session.SessionAdapter{
 		string(uxp.CLIClaude): claudeA,
 	}

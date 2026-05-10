@@ -12,7 +12,7 @@ import (
 )
 
 func resumeCmd() *cobra.Command {
-	var toolFlag string
+	var cliFlag string
 
 	cmd := &cobra.Command{
 		Use:   "resume [<id>]",
@@ -47,6 +47,9 @@ func resumeCmd() *cobra.Command {
 				}
 				id = selected
 			}
+			if !cliFlagChanged(c) && cliFlag == "" {
+				cliFlag = rootViper.GetString("default_cli")
+			}
 
 			var res *api.ResumeSessionResult
 			if err := runWithProgress(c.Context(), "resume", "preparing resume", func() error {
@@ -55,7 +58,7 @@ func resumeCmd() *cobra.Command {
 					c.Context(),
 					api.ResumeSessionRequest{
 						ID:         id,
-						TargetTool: toolFlag,
+						TargetCLI:  cliFlag,
 						ProjectCWD: cwd,
 					})
 				return err
@@ -78,7 +81,7 @@ func resumeCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&toolFlag, "tool", "",
+	addCLIFlag(cmd, &cliFlag,
 		"Target CLI to resume in (claude, codex, gemini, opencode)")
 	return cmd
 }

@@ -13,7 +13,7 @@ import (
 
 type ResumeSessionRequest struct {
 	ID          string
-	TargetTool  string
+	TargetCLI   string
 	ProjectCWD  string
 	LineagePath string
 }
@@ -54,19 +54,19 @@ func (s *Service) ResumeSession(ctx context.Context, req ResumeSessionRequest) (
 		sourceAdapter = s.adapters[sourceCLI]
 	}
 
-	if req.TargetTool == "" {
+	if req.TargetCLI == "" {
 		return nil, fmt.Errorf(
-			"specify target CLI with --tool (source: %s)", sourceCLI)
+			"specify target CLI with --cli (source: %s)", sourceCLI)
 	}
-	targetAdapter, ok := s.adapters[req.TargetTool]
+	targetAdapter, ok := s.adapters[req.TargetCLI]
 	if !ok {
-		return nil, fmt.Errorf("unknown CLI %q", req.TargetTool)
+		return nil, fmt.Errorf("unknown CLI %q", req.TargetCLI)
 	}
 	target, ok := targetAdapter.(session.ResumeAdapter)
 	if !ok {
 		return nil, fmt.Errorf(
 			"%q does not support resume (ResumeAdapter not implemented)",
-			req.TargetTool,
+			req.TargetCLI,
 		)
 	}
 
@@ -107,7 +107,7 @@ func (s *Service) ResumeSession(ctx context.Context, req ResumeSessionRequest) (
 		return nil, fmt.Errorf("add source segment: %w", err)
 	}
 	if err := store.AddSegment(
-		uspID, req.TargetTool, nativeID, 0,
+		uspID, req.TargetCLI, nativeID, 0,
 	); err != nil {
 		return nil, fmt.Errorf("add target segment: %w", err)
 	}
@@ -115,7 +115,7 @@ func (s *Service) ResumeSession(ctx context.Context, req ResumeSessionRequest) (
 	return &ResumeSessionResult{
 		USPID:        uspID,
 		SourceCLI:    sourceCLI,
-		TargetCLI:    req.TargetTool,
+		TargetCLI:    req.TargetCLI,
 		TargetNative: nativeID,
 		Command:      target.ResumeCmd(nativeID),
 	}, nil

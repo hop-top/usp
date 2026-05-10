@@ -40,8 +40,8 @@ findings filed; 8 implemented, 1 doc-only wontfix, 2 already covered.
 
 #### Changed
 
-- `session skills` now uses `--tool` (matching every other
-  session-tree command) instead of the one-off `--cli`. (T-0109)
+- CLI-selection flags use `--cli` so they don't collide with
+  model/tool invocation terminology.
 - JSON / YAML output formats render timestamps as ISO 8601;
   relative time wording (`5m ago`) is reserved for `--format=table`.
   (T-0115)
@@ -62,7 +62,7 @@ findings filed; 8 implemented, 1 doc-only wontfix, 2 already covered.
 - `usp setup` — detect CLIs and build the local index.
 - `usp session list / show / search / lineage` — read-side surface,
   full-text search, cross-CLI continuation chain.
-- `usp resume <id> --tool <cli>` — stream turns from one CLI's
+- `usp resume <id> --cli <cli>` — stream turns from one CLI's
   session and `syscall.Exec` into another, recording lineage.
 - `usp-ctxt` companion binary — bridge usp sessions into ctxt as
   knowledge objects with stable mentions; idempotent re-runs via
@@ -98,7 +98,7 @@ findings filed; 8 implemented, 1 doc-only wontfix, 2 already covered.
 - Globals: `--config <path>`, `--offline` (placeholder).
 - Layered config (kit/config): defaults → `/etc/usp/config.yaml` →
   `$XDG_CONFIG_HOME/usp/config.yaml` → `./.usp.yaml` → `--config` →
-  `USP_*` env → CLI flags. Initial keys: `default_tool`, `default_limit`.
+  `USP_*` env → CLI flags. Initial keys: `default_cli`, `default_limit`.
 - Lineage and index DBs honor `XDG_STATE_HOME` / `XDG_DATA_HOME` via
   kit/xdg. Defaults: `~/.local/state/usp/sessions.db` and
   `~/.local/share/usp/index.db`.

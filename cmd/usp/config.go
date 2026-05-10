@@ -23,7 +23,7 @@ import (
 //  7. -c/--config key=value overrides
 //  8. CLI flags
 type Config struct {
-	DefaultTool  string `yaml:"default_tool"`
+	DefaultCLI   string `yaml:"default_cli"`
 	DefaultLimit int    `yaml:"default_limit"`
 	CacheTTL     string `yaml:"cache_ttl"`
 }
@@ -32,7 +32,7 @@ var uspConfigMarkers = []string{".usp.yaml", ".usp/config.yaml"}
 
 // defaultConfig returns the baseline values for a fresh install.
 func defaultConfig() Config {
-	return Config{DefaultTool: "", DefaultLimit: 20, CacheTTL: "10m"}
+	return Config{DefaultCLI: "", DefaultLimit: 20, CacheTTL: "10m"}
 }
 
 // loadConfig resolves the layered config and merges it into rootViper
@@ -58,7 +58,7 @@ func loadConfigWithLayers(
 	if err := kitconfig.Load(&cfg, opts); err != nil {
 		return cfg, fmt.Errorf("load config: %w", err)
 	}
-	v.SetDefault("default_tool", cfg.DefaultTool)
+	v.SetDefault("default_cli", cfg.DefaultCLI)
 	v.SetDefault("default_limit", cfg.DefaultLimit)
 	v.SetDefault("cache_ttl", cfg.CacheTTL)
 	return cfg, nil
@@ -66,8 +66,8 @@ func loadConfigWithLayers(
 
 // mergeConfig copies non-zero fields from src to dst.
 func mergeConfig(dst, src *Config) {
-	if src.DefaultTool != "" {
-		dst.DefaultTool = src.DefaultTool
+	if src.DefaultCLI != "" {
+		dst.DefaultCLI = src.DefaultCLI
 	}
 	if src.DefaultLimit != 0 {
 		dst.DefaultLimit = src.DefaultLimit

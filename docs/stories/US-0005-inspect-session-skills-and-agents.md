@@ -23,7 +23,7 @@ bad and avoid repeating mistakes.
       `usp session show <id> --skills`, then the
       single-session detail view embeds the same data inline
       with the rest of the transcript
-- [ ] Given filters `--tool`, `--project`, `--since`,
+- [ ] Given filters `--cli`, `--project`, `--since`,
       `--until`, when I combine them, then results narrow
       additively (AND semantics) to the intersection
 - [ ] Given `--name <skill-name>` on `session skills`, when

@@ -90,7 +90,7 @@ usp session list --format json       # use any global flag at the root
 **Synopsis**
 
 ```sh
-usp doctor [--tool <cli>] [--format <fmt>]
+usp doctor [--cli <cli>] [--format <fmt>]
 ```
 
 **Args** — none.
@@ -99,13 +99,13 @@ usp doctor [--tool <cli>] [--format <fmt>]
 
 | Flag | Default | Effect |
 |---|---|---|
-| `--tool <cli>` | all CLIs | Restrict checks to a single CLI (`claude`, `codex`, `gemini`, `opencode`). |
+| `--cli <cli>` | all CLIs | Restrict checks to a single CLI (`claude`, `codex`, `gemini`, `opencode`). |
 
 **Examples**
 
 ```sh
 usp doctor                           # check everything
-usp doctor --tool claude             # check only the claude adapter
+usp doctor --cli claude             # check only the claude adapter
 usp doctor --format json             # machine-readable health report
 ```
 
@@ -156,7 +156,7 @@ storage, records lineage, and `exec`s the target CLI.
 **Synopsis**
 
 ```sh
-usp resume [<id>] --tool <cli>
+usp resume [<id>] --cli <cli>
 ```
 
 **Args**
@@ -169,14 +169,14 @@ usp resume [<id>] --tool <cli>
 
 | Flag | Default | Effect |
 |---|---|---|
-| `--tool <cli>` | _required_ | Target CLI to resume in (`claude`, `codex`, `gemini`, `opencode`). |
+| `--cli <cli>` | _required_ | Target CLI to resume in (`claude`, `codex`, `gemini`, `opencode`). |
 
 **Examples**
 
 ```sh
-usp resume --tool codex                       # most recent session for cwd → Codex
-usp resume a1b2c3d4-... --tool gemini         # explicit source session
-usp resume --tool claude                      # round-trip back to Claude
+usp resume --cli codex                       # most recent session for cwd → Codex
+usp resume a1b2c3d4-... --cli gemini         # explicit source session
+usp resume --cli claude                      # round-trip back to Claude
 ```
 
 **Behaviour notes**
@@ -224,7 +224,7 @@ usp session [command] [--flags]
 **Synopsis**
 
 ```sh
-usp session list [--tool <cli>] [--project <path>] [--since <when>] [--limit N] [--format <fmt>]
+usp session list [--cli <cli>] [--project <path>] [--since <when>] [--limit N] [--format <fmt>]
 ```
 
 **Args** — none.
@@ -233,7 +233,7 @@ usp session list [--tool <cli>] [--project <path>] [--since <when>] [--limit N] 
 
 | Flag | Default | Effect |
 |---|---|---|
-| `--tool <cli>` | all | Filter to a single CLI. |
+| `--cli <cli>` | all | Filter to a single CLI. |
 | `--project <path>` | all | Filter to a project directory. |
 | `--since <when>` | all time | Cutoff: ISO date (`2026-04-01`) or duration (`7d`, `24h`). |
 | `--limit N` | `20` | Maximum sessions to display. |
@@ -242,7 +242,7 @@ usp session list [--tool <cli>] [--project <path>] [--since <when>] [--limit N] 
 
 ```sh
 usp session list                                      # 20 most recent across everything
-usp session list --tool claude --since 7d --limit 5   # last 5 Claude sessions in past week
+usp session list --cli claude --since 7d --limit 5   # last 5 Claude sessions in past week
 usp session list --project ~/projects/myapp --format json
 ```
 
@@ -258,7 +258,7 @@ usp session list --project ~/projects/myapp --format json
 **Synopsis**
 
 ```sh
-usp session search <query> [--tool <cli>] [--project <path>] \
+usp session search <query> [--cli <cli>] [--project <path>] \
                             [--since <when>] [--limit N] [--format <fmt>]
 ```
 
@@ -272,7 +272,7 @@ usp session search <query> [--tool <cli>] [--project <path>] \
 
 | Flag | Default | Effect |
 |---|---|---|
-| `--tool <cli>` | all | Restrict to one CLI. |
+| `--cli <cli>` | all | Restrict to one CLI. |
 | `--project <path>` | all | Restrict to a project dir. |
 | `--since <when>` | all time | Cutoff: ISO date or duration (e.g. `7d`). |
 | `--limit N` | `20` | Maximum result rows. |
@@ -281,7 +281,7 @@ usp session search <query> [--tool <cli>] [--project <path>] \
 
 ```sh
 usp session search "auth refactor"
-usp session search graphql --tool codex --since 30d
+usp session search graphql --cli codex --since 30d
 usp session search "panic" --format json --limit 5
 ```
 
@@ -296,7 +296,7 @@ usp session search "panic" --format json --limit 5
 **Synopsis**
 
 ```sh
-usp session show <id> [--tool <cli>] [--project <path>] [--since <when>] [--format <fmt>]
+usp session show <id> [--cli <cli>] [--project <path>] [--since <when>] [--format <fmt>]
 ```
 
 **Args**
@@ -309,7 +309,7 @@ usp session show <id> [--tool <cli>] [--project <path>] [--since <when>] [--form
 
 | Flag | Default | Effect |
 |---|---|---|
-| `--tool <cli>` | all | Restrict prefix-match search to one CLI. |
+| `--cli <cli>` | all | Restrict prefix-match search to one CLI. |
 | `--project <path>` | all | Narrow prefix match to a project dir. |
 | `--since <when>` | all time | Narrow prefix match to a recency window. |
 
@@ -318,7 +318,7 @@ usp session show <id> [--tool <cli>] [--project <path>] [--since <when>] [--form
 ```sh
 usp session show fe2eb947-ecab-4293-a26c-3485062e8e6a    # full UUID
 usp session show fe2eb947 --project ~/projects/tlc       # disambiguate by project
-usp session show fe2eb947 --tool claude --format json
+usp session show fe2eb947 --cli claude --format json
 ```
 
 **Cross-refs** — [`usp session list`](#usp-session-list) (find the ID);

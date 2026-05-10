@@ -203,7 +203,7 @@ type ResumeAdapter interface {
 }
 ```
 
-`usp resume --tool <cli>` calls `InjectSession()` to write
+`usp resume --cli <cli>` calls `InjectSession()` to write
 prior session turns into the target CLI's native format,
 then `ResumeCmd()` returns the command to launch the CLI in
 that session.
@@ -213,7 +213,7 @@ that session.
 ```
 usp session show <id>              → segment table per-CLI
 usp session lineage <id>           → cross-CLI chain rendered
-usp resume --tool codex            → InjectSession into codex format → exec ResumeCmd
+usp resume --cli codex            → InjectSession into codex format → exec ResumeCmd
 ```
 
 The lineage store at
@@ -281,5 +281,5 @@ still consulted on miss.
 3. **E2E cassette mode.** `e2e/cassettes/` exists. Is live recording active or tape-only?
 4. **Partial UUID prefix spec.** T-0061 mentions partial UUID prefix matching. Full matching spec (8-char, 16-char) not documented.
 5. **Slug normalisation rules.** Commit `3972bf5` mentions slug normalisation. Rules (lowercase, hyphens, max length) not documented.
-6. **Resume fallback semantics.** If `usp resume --tool gemini` fails during `InjectSession()`, does the lineage store stay consistent?
+6. **Resume fallback semantics.** If `usp resume --cli gemini` fails during `InjectSession()`, does the lineage store stay consistent?
 7. **`docs/architecture/data-flow-v1.mmd`.** Diagram exists but not referenced from this doc. Up to date post-lineage / bridge?

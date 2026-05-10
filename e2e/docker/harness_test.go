@@ -147,7 +147,7 @@ func TestCrossCliResume(t *testing.T) {
 
 	// Step 2: Resume into codex.
 	r = runSafe(t, ctx, []string{
-		"usp", "resume", "--tool", "codex", "--inject-only",
+		"usp", "resume", "--cli", "codex", "--inject-only",
 	}, dir)
 	if r.ExitCode != 0 {
 		t.Skip("--inject-only not implemented; skipping resume chain")
@@ -156,7 +156,7 @@ func TestCrossCliResume(t *testing.T) {
 
 	// Step 3: Resume into gemini.
 	r = runSafe(t, ctx, []string{
-		"usp", "resume", "--tool", "gemini", "--inject-only",
+		"usp", "resume", "--cli", "gemini", "--inject-only",
 	}, dir)
 	t.Logf("resume→gemini exit=%d", r.ExitCode)
 
@@ -237,8 +237,8 @@ func TestSessionFilters(t *testing.T) {
 	}
 	t.Logf("seeded %d sessions", total)
 
-	if n := countSessions("--tool", "claude"); n < 1 {
-		t.Errorf("--tool claude: want >=1, got %d", n)
+	if n := countSessions("--cli", "claude"); n < 1 {
+		t.Errorf("--cli claude: want >=1, got %d", n)
 	}
 	if n := countSessions("--project", projectA); n < 1 {
 		t.Errorf("--project project-a: want >=1, got %d", n)
@@ -249,8 +249,8 @@ func TestSessionFilters(t *testing.T) {
 	if n := countSessions("--since", "1h"); n < 1 {
 		t.Errorf("--since 1h: want >=1, got %d", n)
 	}
-	if n := countSessions("--tool", "claude", "--project", projectA); n < 1 {
-		t.Errorf("--tool claude + --project a: want >=1, got %d", n)
+	if n := countSessions("--cli", "claude", "--project", projectA); n < 1 {
+		t.Errorf("--cli claude + --project a: want >=1, got %d", n)
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"hop.top/kit/go/core/uxp"
+	kitgemini "hop.top/kit/go/core/uxp/invoke/adapters/gemini"
 	"hop.top/usp/session"
 )
 
@@ -266,8 +267,10 @@ func (a *Adapter) InjectSession(cwd string, turns []session.Turn) (string, error
 }
 
 // ResumeCmd returns the CLI command to resume an injected session.
+// Delegates to kit's invocation facade so the argv stays in lockstep
+// with the cross-CLI matrix in go/core/uxp/README.md.
 func (a *Adapter) ResumeCmd(nativeID string) []string {
-	return []string{"gemini", "--resume", nativeID}
+	return session.ResumeCmdFor(kitgemini.New(), nativeID)
 }
 
 func (a *Adapter) findChatFile(id string) (string, string, error) {

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"hop.top/kit/go/core/uxp"
+	kitopencode "hop.top/kit/go/core/uxp/invoke/adapters/opencode"
 	"hop.top/usp/session"
 
 	_ "modernc.org/sqlite"
@@ -485,8 +486,12 @@ func (a *Adapter) InjectSession(cwd string, turns []session.Turn) (string, error
 }
 
 // ResumeCmd returns the CLI command to resume an injected session.
+// Delegates to kit's invocation facade so the argv stays in lockstep
+// with the cross-CLI matrix in go/core/uxp/README.md. (kit's adapter
+// emits the correct `opencode run --session <id>` form; the previous
+// in-tree string was missing the `run` subcommand.)
 func (a *Adapter) ResumeCmd(nativeID string) []string {
-	return []string{"opencode", "--session", nativeID}
+	return session.ResumeCmdFor(kitopencode.New(), nativeID)
 }
 
 // capMap implements uxp.CapabilityMap for OpenCode.

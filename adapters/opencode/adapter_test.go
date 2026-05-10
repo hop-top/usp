@@ -385,7 +385,11 @@ func TestStreamTurnsOrdering(t *testing.T) {
 func TestResumeCmd(t *testing.T) {
 	a := New()
 	cmd := a.ResumeCmd("ses_abc123")
-	want := []string{"opencode", "--session", "ses_abc123"}
+	// opencode's resume is `opencode run --session <id>`; the `run`
+	// subcommand is required. The previous in-tree string omitted
+	// it (likely a latent bug); kit's invocation facade emits the
+	// correct form.
+	want := []string{"opencode", "run", "--session", "ses_abc123"}
 	if len(cmd) != len(want) {
 		t.Fatalf("ResumeCmd len = %d, want %d", len(cmd), len(want))
 	}

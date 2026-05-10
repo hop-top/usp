@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"hop.top/kit/go/core/uxp"
+	kitcodex "hop.top/kit/go/core/uxp/invoke/adapters/codex"
 	"hop.top/usp/session"
 )
 
@@ -161,8 +162,12 @@ func (a *Adapter) InjectSession(cwd string, turns []session.Turn) (string, error
 }
 
 // ResumeCmd returns the CLI command to resume the given session.
+// Delegates to kit's invocation facade so the argv stays in lockstep
+// with the cross-CLI matrix in go/core/uxp/README.md. Codex defaults
+// to interactive `codex resume <id>` when no output format is
+// requested, matching the typical human-in-the-loop resume flow.
 func (a *Adapter) ResumeCmd(nativeID string) []string {
-	return []string{"codex", "resume", nativeID}
+	return session.ResumeCmdFor(kitcodex.New(), nativeID)
 }
 
 // generateUUIDv7 produces a UUIDv7-style string from the given time

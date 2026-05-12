@@ -69,7 +69,9 @@ func main() {
 				return nil
 			},
 		},
-	})
+	},
+		statusOption(),
+	)
 	rootViper = root.Viper
 	activeRoot = root
 

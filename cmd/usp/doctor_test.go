@@ -5,8 +5,27 @@ import (
 	"os"
 	"testing"
 
+	"hop.top/kit/go/console/cli"
 	"hop.top/kit/go/core/uxp"
 )
+
+// TestDoctorCmd_Annotations pins the kit conformance annotations
+// the strict validator requires on this depth-1 leaf.
+func TestDoctorCmd_Annotations(t *testing.T) {
+	cmd := doctorCmd()
+	if se, ok := cli.GetSideEffect(cmd); !ok || se != cli.SideEffectRead {
+		t.Errorf("doctor side-effect = (%q,%v), want (read,true)", se, ok)
+	}
+	if id, ok := cli.GetIdempotency(cmd); !ok || id != cli.IdempotencyYes {
+		t.Errorf("doctor idempotency = (%q,%v), want (yes,true)", id, ok)
+	}
+	if !cli.IsTopLevelVerb(cmd) {
+		t.Error("doctor missing kit/top-level-verb annotation")
+	}
+	if cmd.Long == "" {
+		t.Error("doctor missing Long help")
+	}
+}
 
 func TestDoctorRowsRender(t *testing.T) {
 	checks := []uxp.Check{

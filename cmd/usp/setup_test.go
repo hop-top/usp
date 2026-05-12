@@ -5,8 +5,28 @@ import (
 	"strings"
 	"testing"
 
+	"hop.top/kit/go/console/cli"
 	"hop.top/kit/go/console/output"
 )
+
+// TestSetupCmd_Annotations pins kit conformance annotations on the
+// depth-1 setup leaf (writes the index DB → write-local, not
+// idempotent).
+func TestSetupCmd_Annotations(t *testing.T) {
+	cmd := setupCmd()
+	if se, ok := cli.GetSideEffect(cmd); !ok || se != cli.SideEffectWriteLocal {
+		t.Errorf("setup side-effect = (%q,%v), want (write-local,true)", se, ok)
+	}
+	if id, ok := cli.GetIdempotency(cmd); !ok || id != cli.IdempotencyNo {
+		t.Errorf("setup idempotency = (%q,%v), want (no,true)", id, ok)
+	}
+	if !cli.IsTopLevelVerb(cmd) {
+		t.Error("setup missing kit/top-level-verb annotation")
+	}
+	if cmd.Long == "" {
+		t.Error("setup missing Long help")
+	}
+}
 
 func TestInstallRowsTableTags(t *testing.T) {
 	rows := []setupRow{

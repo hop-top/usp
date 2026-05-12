@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"hop.top/kit/go/console/cli"
 	"hop.top/kit/go/console/output"
 	"hop.top/kit/go/core/uxp"
 	"hop.top/usp/index"
@@ -23,10 +24,23 @@ type setupRow struct {
 }
 
 func setupCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "setup [cli]",
 		Short: "Detect CLIs and index sessions",
-		Args:  cobra.MaximumNArgs(1),
+		Long: `Detect every supported CLI adapter on the current host
+and seed usp's project index DB with the sessions discovered for
+each one.
+
+The default invocation walks the full adapter registry; pass a
+single adapter name (e.g. "usp setup claude") to scope the run.
+For each adapter setup probes installation + version, opens the
+adapter's session store, and writes a summary row reporting how
+many transcripts were enrolled into the index.
+
+This command writes to the index DB on disk and is therefore not
+idempotent without further care — re-running it appends to / re-
+seeds existing rows for the same adapter.`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			if err := runSetup(c.Context(), args); err != nil {
 				return err
@@ -35,6 +49,10 @@ func setupCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cli.SetSideEffect(cmd, cli.SideEffectWriteLocal)
+	cli.SetIdempotency(cmd, cli.IdempotencyNo)
+	cli.SetTopLevelVerb(cmd)
+	return cmd
 }
 
 func runSetup(ctx context.Context, args []string) error {

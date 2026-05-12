@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/spf13/cobra"
 
+	"hop.top/kit/go/console/cli"
 	"hop.top/kit/go/core/upgrade"
 )
 
@@ -21,19 +22,34 @@ func newUpgradeChecker() *upgrade.Checker {
 // Mirrors tlc's wiring: thin wrapper around upgrade.RunCLI so the
 // human prompt + GitHub release flow is identical across kit-built
 // CLIs.
+//
+// The "quiet" knob is read off the persistent kit global
+// (registered by cli.New as --quiet on the root). The leaf used to
+// register its own --quiet/-q pair, which silently shadowed the
+// kit global for `usp upgrade` only; that local registration has
+// been dropped so the kit global wins — see TestUpgradeCmd_QuietIsGlobal.
 func upgradeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "upgrade",
 		Short: "Check for and install updates",
-		Long:  "Check for a newer version of usp and optionally install it.",
+		Long: `Check GitHub releases for a newer usp build and, if one
+exists, prompt to install it in place.
+
+Re-running upgrade against an already up-to-date binary is a
+no-op (the kit global --quiet suppresses the "already current"
+notice). Pass --auto to skip the interactive prompt and install
+unconditionally; the operation overwrites the current binary on
+disk, so treat it as a write step in any reproducible runbook.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			auto, _ := cmd.Flags().GetBool("auto")
-			quiet, _ := cmd.Flags().GetBool("quiet")
+			quiet := rootViper.GetBool("quiet")
 			return upgrade.RunCLI(cmd.Context(), newUpgradeChecker(),
 				upgrade.CLIOptions{AutoUpgrade: auto, Quiet: quiet})
 		},
 	}
 	cmd.Flags().Bool("auto", false, "Install without prompting")
-	cmd.Flags().BoolP("quiet", "q", false, "Suppress output when already up to date")
+	cli.SetSideEffect(cmd, cli.SideEffectWriteLocal)
+	cli.SetIdempotency(cmd, cli.IdempotencyNo)
+	cli.SetTopLevelVerb(cmd)
 	return cmd
 }

@@ -6,16 +6,25 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"hop.top/kit/go/console/cli"
 	"hop.top/usp/internal/sessionutil"
 	"hop.top/usp/lineage"
 	"hop.top/usp/session"
 )
 
 func sessionLineageCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "lineage <id>",
 		Short: "Show cross-CLI session lineage",
-		Args:  cobra.ExactArgs(1),
+		Long: `Show the cross-CLI lineage of a single session as an ordered
+list of segments.
+
+The positional <id> accepts either the canonical TypeID or the
+native CLI session id. The lineage store is consulted first; on a
+miss the command falls back to the native adapter resolver and
+displays a one-segment lineage for the single CLI that owns the
+id.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			input := args[0]
 
@@ -42,6 +51,9 @@ func sessionLineageCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cli.SetSideEffect(cmd, cli.SideEffectRead)
+	cli.SetIdempotency(cmd, cli.IdempotencyYes)
+	return cmd
 }
 
 // tryNativeLineage falls back to native adapters for a single-segment display.

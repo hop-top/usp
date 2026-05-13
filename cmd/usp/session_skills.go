@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"hop.top/kit/go/console/cli"
 	"hop.top/kit/go/console/output"
 	"hop.top/usp/internal/api"
 	"hop.top/usp/internal/sessionutil"
@@ -117,6 +118,8 @@ Filters AND-combine: --session, --cli, --project, --name,
 		"Only show skills invoked since (e.g. 2026-04-01, 7d, 24h)")
 	cmd.Flags().StringVar(&until, "until", "",
 		"Only show skills invoked until (e.g. 2026-04-15, 1h)")
+	cli.SetSideEffect(cmd, cli.SideEffectRead)
+	cli.SetIdempotency(cmd, cli.IdempotencyYes)
 	return cmd
 }
 

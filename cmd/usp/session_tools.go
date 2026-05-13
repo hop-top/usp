@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"hop.top/kit/go/console/cli"
 	"hop.top/kit/go/console/output"
 	"hop.top/usp/internal/api"
 	"hop.top/usp/internal/sessionutil"
@@ -115,6 +116,8 @@ mapping exists. Filters AND-combine: --session, --cli, --project,
 		"Only show tool calls since (e.g. 2026-04-01, 7d, 24h)")
 	cmd.Flags().StringVar(&until, "until", "",
 		"Only show tool calls until (e.g. 2026-04-15, 1h)")
+	cli.SetSideEffect(cmd, cli.SideEffectRead)
+	cli.SetIdempotency(cmd, cli.IdempotencyYes)
 	return cmd
 }
 

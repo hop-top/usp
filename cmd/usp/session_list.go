@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"hop.top/kit/go/console/cli"
 	"hop.top/kit/go/console/output"
 	"hop.top/kit/go/core/projects"
 	"hop.top/usp/internal/api"
@@ -43,6 +44,13 @@ func sessionListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List sessions across all supported CLIs",
+		Long: `List recorded sessions discovered across every supported CLI
+(claude, codex, gemini, opencode) and project on this machine.
+
+By default the command narrows to the current working directory and
+falls back to all projects when no session matches. Use --project,
+--cli, --since, and --limit to refine the view. Output respects the
+global --format flag (table, json, yaml).`,
 		RunE: func(c *cobra.Command, _ []string) error {
 			format := formatFromViper()
 			// Honor config defaults when flags weren't explicitly set.
@@ -109,6 +117,8 @@ func sessionListCmd() *cobra.Command {
 		"Show sessions since date (e.g. 2026-04-01, 7d, 24h)")
 	cmd.Flags().IntVar(&limit, "limit", 20,
 		"Maximum sessions to display")
+	cli.SetSideEffect(cmd, cli.SideEffectRead)
+	cli.SetIdempotency(cmd, cli.IdempotencyYes)
 	return cmd
 }
 
@@ -173,7 +183,13 @@ func sessionSearchCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "search <query>",
 		Short: "Search session content across all CLIs",
-		Args:  cobra.ExactArgs(1),
+		Long: `Search recorded session content for a case-insensitive
+substring match against turn text across every supported CLI.
+
+The query is the only required positional. Combine with --project,
+--cli, --since, and --limit to scope the result set. Output honors
+the global --format flag (table, json, yaml).`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			format := formatFromViper()
 			query := strings.ToLower(args[0])
@@ -233,6 +249,8 @@ func sessionSearchCmd() *cobra.Command {
 		"Search sessions since date (e.g. 2026-04-01, 7d, 24h)")
 	cmd.Flags().IntVar(&limit, "limit", 20,
 		"Maximum results")
+	cli.SetSideEffect(cmd, cli.SideEffectRead)
+	cli.SetIdempotency(cmd, cli.IdempotencyYes)
 	return cmd
 }
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"hop.top/kit/go/console/cli"
 	"hop.top/kit/go/console/output"
 	"hop.top/kit/go/core/uxp"
 	"hop.top/usp/internal/api"
@@ -84,7 +85,18 @@ func sessionShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show [<id>]",
 		Short: "Display session metadata and turn summary",
-		Args:  cobra.MaximumNArgs(1),
+		Long: `Display the full metadata and turn-by-turn transcript for a
+single session.
+
+The positional <id> accepts either the canonical TypeID, a unique
+prefix, or the underlying native CLI session id. When omitted, an
+interactive picker selects from sessions in the current project.
+
+Use --cli to restrict the prefix resolver to one adapter, --project
+or --since to narrow the picker pool, and --skills to embed skill
+invocations alongside the transcript. Output honors the global
+--format flag (table, json, yaml).`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			id := ""
 			if len(args) == 1 {
@@ -189,6 +201,8 @@ func sessionShowCmd() *cobra.Command {
 		"Narrow prefix match to sessions since (e.g. 7d, 2026-04-01)")
 	cmd.Flags().BoolVar(&showSkills, "skills", false,
 		"Embed skill invocations alongside the session detail")
+	cli.SetSideEffect(cmd, cli.SideEffectRead)
+	cli.SetIdempotency(cmd, cli.IdempotencyYes)
 	return cmd
 }
 

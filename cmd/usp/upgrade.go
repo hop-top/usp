@@ -28,6 +28,17 @@ func newUpgradeChecker() *upgrade.Checker {
 // register its own --quiet/-q pair, which silently shadowed the
 // kit global for `usp upgrade` only; that local registration has
 // been dropped so the kit global wins — see TestUpgradeCmd_QuietIsGlobal.
+//
+// --auto / kit --confirm bridge: kit's policy middleware only gates
+// destructive* side-effects. `usp upgrade` is annotated write-local
+// (the binary swap is recoverable by reinstall), so kit's confirm
+// matrix does NOT fire here. The interactive y/N prompt lives inside
+// kit's upgrade.RunCLI and is gated by --auto, which therefore acts
+// as the local bridge equivalent of --confirm=yes for this command.
+// We keep --auto rather than wiring kit's --confirm into RunCLI
+// because the RunCLI prompt also accepts a third "snooze" answer
+// that --confirm cannot express (auto|yes|no|prompt). See
+// docs/migration/kit-12fcc-confirm.md for the full matrix.
 func upgradeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "upgrade",
@@ -39,7 +50,14 @@ Re-running upgrade against an already up-to-date binary is a
 no-op (the kit global --quiet suppresses the "already current"
 notice). Pass --auto to skip the interactive prompt and install
 unconditionally; the operation overwrites the current binary on
-disk, so treat it as a write step in any reproducible runbook.`,
+disk, so treat it as a write step in any reproducible runbook.
+
+Note: --auto is the local bridge equivalent of kit's --confirm=yes
+for this command. Because upgrade is annotated write-local (the
+binary swap is reversible by reinstall), kit's destructive-confirm
+gate never fires here; --auto controls the interactive prompt
+inside upgrade.RunCLI. The "snooze" answer at the interactive
+prompt has no --confirm equivalent.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			auto, _ := cmd.Flags().GetBool("auto")
 			quiet := rootViper.GetBool("quiet")
@@ -47,7 +65,8 @@ disk, so treat it as a write step in any reproducible runbook.`,
 				upgrade.CLIOptions{AutoUpgrade: auto, Quiet: quiet})
 		},
 	}
-	cmd.Flags().Bool("auto", false, "Install without prompting")
+	cmd.Flags().Bool("auto", false,
+		"Install without prompting (bridge: equivalent to --confirm=yes for this command)")
 	cli.SetSideEffect(cmd, cli.SideEffectWriteLocal)
 	cli.SetIdempotency(cmd, cli.IdempotencyNo)
 	cli.SetTopLevelVerb(cmd)

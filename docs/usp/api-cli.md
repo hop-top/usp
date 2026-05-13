@@ -71,7 +71,7 @@ usp [command] [--flags]
 | ORGANIZE | [`doctor`](#usp-doctor) | Health-check the environment for supported CLIs. |
 | ORGANIZE | [`setup`](#usp-setup) | Detect CLIs and (re)build the index. |
 | MANAGEMENT | [`alias`](#usp-alias) | Manage user-defined command aliases (hidden from default help; see `--help-all`). |
-| MANAGEMENT | `config` / `version` / `upgrade` | Standard kit-managed surface (`--help-all`). |
+| MANAGEMENT | `config` / `version` / `upgrade` / `status` | Standard kit-managed surface (`--help-all`). `status` reports profile, env, workspace, auth, effective-config, and kit annotations; see [`docs/migration/kit-12fcc-confirm.md`](../migration/kit-12fcc-confirm.md). |
 
 **Examples**
 

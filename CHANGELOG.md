@@ -79,6 +79,39 @@ the auto-generated release notes pick the entries up.
 
 ## Unreleased
 
+### Kit 12fcc-leak migration (refactor/kit-12fcc-integration)
+
+Aligns `usp` with kit's strict CLI validation gate (Layer-A
+annotations) and the global `--confirm` policy middleware. See
+[`docs/migration/kit-12fcc-confirm.md`](docs/migration/kit-12fcc-confirm.md)
+for the full audit + side-effect ladder.
+
+#### Added
+
+- `usp status` — kit-shipped reserved subcommand (profile, env,
+  workspace, auth, effective-config, kit-annotations). Mounted via
+  `cli.WithStatus`; surfaces in `--help`. (T-0120)
+- Every runnable leaf carries `kit/side-effect` + `kit/idempotent`
+  annotations. Production `cli.New` runs with the strict gate on
+  (no `DisableValidate` opt-out). (T-0119, T-0121, T-0122)
+- `TestRootValidate_StrictGatePasses` regression at
+  `cmd/usp/root_strict_validation_test.go` — fails if any future
+  leaf drops its annotation.
+
+#### Changed
+
+- `go.mod` `replace hop.top/kit` points at `kit/hops/12fcc-leak`
+  during the integration cycle. A follow-up release-tag pin will
+  land once kit publishes. (T-0119)
+
+#### Compatibility
+
+- `usp upgrade --auto` retained as a bridge to `--confirm=yes`
+  (preserves the kit `upgrade.RunCLI` snooze answer not expressible
+  via `--confirm`). (T-0122)
+- Zero `destructive*` leaves today; `setup`, `upgrade`, and
+  `alias delete` are `write-local` and bypass kit's confirm gate.
+
 ### CLI parity re-check (post-2026-05-02)
 
 Aligns `usp` with the latest `~/.ops/docs/cli-conventions-with-kit.md`

@@ -121,6 +121,53 @@ func TestListSessionItemsSummarizesTurns(t *testing.T) {
 	}
 }
 
+func TestFindSessionItemsMatchesReferenceForms(t *testing.T) {
+	a := &fakeAdapter{
+		sessions: []session.Session{
+			mkSession("sess_issue", "native-issue", uxp.CLICodex, time.Now()),
+		},
+		turns: []session.Turn{{
+			Role:    session.RoleUser,
+			Content: "Investigate issue #31 and related failing test.",
+		}},
+	}
+	svc := New(map[string]session.SessionAdapter{uxp.CLICodex: a})
+
+	got, err := svc.FindSessionItems(context.Background(), FindSessionItemsRequest{
+		Project: "/tmp/project",
+		Filter:  "issue#31",
+	})
+	if err != nil {
+		t.Fatalf("FindSessionItems: %v", err)
+	}
+	if len(got) != 1 || got[0].Session.ID != "sess_issue" {
+		t.Fatalf("FindSessionItems = %+v, want sess_issue", got)
+	}
+}
+
+func TestFindSessionItemsMatchesCommitSHA(t *testing.T) {
+	a := &fakeAdapter{
+		sessions: []session.Session{
+			mkSession("sess_commit", "native-commit", uxp.CLICodex, time.Now()),
+		},
+		turns: []session.Turn{{
+			Role:    session.RoleUser,
+			Content: "Review regression introduced by abc123def456.",
+		}},
+	}
+	svc := New(map[string]session.SessionAdapter{uxp.CLICodex: a})
+
+	got, err := svc.FindSessionItems(context.Background(), FindSessionItemsRequest{
+		Filter: "commit:abc123def456",
+	})
+	if err != nil {
+		t.Fatalf("FindSessionItems: %v", err)
+	}
+	if len(got) != 1 || got[0].Session.ID != "sess_commit" {
+		t.Fatalf("FindSessionItems = %+v, want sess_commit", got)
+	}
+}
+
 func TestShowSessionReturnsDetail(t *testing.T) {
 	started := time.Date(2026, 5, 9, 12, 0, 0, 0, time.UTC)
 	a := &fakeAdapter{

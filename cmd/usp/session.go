@@ -13,6 +13,7 @@ func sessionCmd(_ *cli.Root) *cobra.Command {
 	}
 	cmd.AddCommand(
 		sessionListCmd(),
+		sessionResumeCmd(),
 		sessionShowCmd(),
 		sessionSearchCmd(),
 		sessionLineageCmd(),

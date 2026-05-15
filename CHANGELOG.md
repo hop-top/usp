@@ -138,6 +138,8 @@ findings filed; 8 implemented, 1 doc-only wontfix, 2 already covered.
   to the target. (T-0105)
 - `usp session tools` — lists tool calls across matching sessions,
   enriched with Kit's universal tool taxonomy.
+- `usp session resume` — resumes this project's latest closed session
+  or prompts from content-filtered matches.
 - `CHANGELOG.md` — release-please-compatible structure for upcoming
   tagged releases. (T-0116)
 

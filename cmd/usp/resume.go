@@ -78,16 +78,7 @@ func resumeCmd() *cobra.Command {
 
 			slog.Info("resuming session",
 				"target", res.TargetCLI, "session", res.TargetNative)
-			resumeLastUSPID = res.USPID
-			emitHint("resume")
-
-			// Hand off to target CLI.
-			argv := res.Command
-			bin, err := exec.LookPath(argv[0])
-			if err != nil {
-				return fmt.Errorf("find %s: %w", argv[0], err)
-			}
-			return syscall.Exec(bin, argv, os.Environ())
+			return execResumeResult(res)
 		},
 	}
 
@@ -103,4 +94,16 @@ func resumeCmd() *cobra.Command {
 	cli.SetIdempotency(cmd, cli.IdempotencyNo)
 	cli.SetTopLevelVerb(cmd)
 	return cmd
+}
+
+func execResumeResult(res *api.ResumeSessionResult) error {
+	resumeLastUSPID = res.USPID
+	emitHint("resume")
+
+	argv := res.Command
+	bin, err := exec.LookPath(argv[0])
+	if err != nil {
+		return fmt.Errorf("find %s: %w", argv[0], err)
+	}
+	return syscall.Exec(bin, argv, os.Environ())
 }

@@ -47,8 +47,9 @@ findings filed; 8 implemented, 1 doc-only wontfix, 2 already covered.
 - JSON / YAML output formats render timestamps as ISO 8601;
   relative time wording (`5m ago`) is reserved for `--format=table`.
   (T-0115)
-- `go.mod` carries a `replace` for `hop.top/kit` → `kit/hops/main`
-  so the local kit worktree drives builds. (T-0118)
+- `go.mod` pins `hop.top/kit v0.4.0-alpha.2` from the published
+  mirror at `github.com/hop-top/kit`; the prior local `replace`
+  directive has been removed. (T-0118)
 
 #### Documented (wontfix / deferred)
 

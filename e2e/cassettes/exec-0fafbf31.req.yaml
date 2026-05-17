@@ -1,0 +1,13 @@
+xrr: "1"
+adapter: exec
+fingerprint: 0fafbf31
+recorded_at: "2026-05-17T16:47:07Z"
+payload:
+    argv:
+        - usp
+        - session
+        - list
+        - --format
+        - json
+        - --since
+        - 1h

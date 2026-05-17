@@ -1,0 +1,10 @@
+xrr: "1"
+adapter: exec
+fingerprint: 46fbf8af
+recorded_at: "2026-05-17T16:47:07Z"
+payload:
+    argv:
+        - git
+        - config
+        - user.name
+        - test

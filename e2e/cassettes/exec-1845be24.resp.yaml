@@ -1,0 +1,10 @@
+xrr: "1"
+adapter: exec
+fingerprint: 1845be24
+recorded_at: "2026-05-17T16:46:39Z"
+error: exit status 41
+payload:
+    stdout: ""
+    stderr: |
+        Please set an Auth method in your /root/.gemini/settings.json or specify one of the following environment variables before running: GEMINI_API_KEY, GOOGLE_GENAI_USE_VERTEXAI, GOOGLE_GENAI_USE_GCA
+    exit_code: 41

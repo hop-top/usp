@@ -1,0 +1,12 @@
+xrr: "1"
+adapter: exec
+fingerprint: 1f9446bf
+recorded_at: "2026-05-17T16:46:40Z"
+payload:
+    argv:
+        - claude
+        - --dangerously-skip-permissions
+        - -p
+        - create a simple Go HTTP server
+        - --output-format
+        - json

@@ -67,9 +67,13 @@ func RunCommand(
 
 	ensureSession()
 
+	// Fingerprint deliberately omits cwd: e2e tests use t.TempDir()
+	// which generates a non-deterministic path each run, so including
+	// cwd in the fingerprint makes recorded cassettes unreplayable.
+	// The cwd is still passed to runDirect below so the command
+	// executes in the right working directory.
 	req := &xrrexec.Request{
 		Argv: argv,
-		Cwd:  cwd,
 	}
 
 	resp, err := session.Record(ctx, adapter, req,

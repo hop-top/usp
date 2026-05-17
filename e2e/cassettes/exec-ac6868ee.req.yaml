@@ -1,0 +1,12 @@
+xrr: "1"
+adapter: exec
+fingerprint: ac6868ee
+recorded_at: "2026-05-17T16:47:07Z"
+payload:
+    argv:
+        - claude
+        - --dangerously-skip-permissions
+        - -p
+        - hello world
+        - --output-format
+        - json

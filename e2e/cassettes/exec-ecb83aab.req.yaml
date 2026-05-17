@@ -1,0 +1,10 @@
+xrr: "1"
+adapter: exec
+fingerprint: ecb83aab
+recorded_at: "2026-05-17T16:47:07Z"
+payload:
+    argv:
+        - git
+        - config
+        - user.email
+        - test@test.com

@@ -1,0 +1,12 @@
+xrr: "1"
+adapter: exec
+fingerprint: 5fff3524
+recorded_at: "2026-05-17T16:47:07Z"
+payload:
+    stdout: |
+        []
+    stderr: |
+        xrr: mode=record cassette_dir=/cassettes
+        {"phase":"sessions","at":"2026-05-17T16:47:07.298254824Z","item":"loading sessions"}
+        {"phase":"sessions","at":"2026-05-17T16:47:07.30521314Z","item":"loading sessions","ok":true}
+    exit_code: 0

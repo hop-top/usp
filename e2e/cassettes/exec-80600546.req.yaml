@@ -1,0 +1,9 @@
+xrr: "1"
+adapter: exec
+fingerprint: "80600546"
+recorded_at: "2026-05-17T16:46:38Z"
+payload:
+    argv:
+        - codex
+        - exec
+        - list files in /tmp

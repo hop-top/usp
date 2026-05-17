@@ -1,0 +1,22 @@
+xrr: "1"
+adapter: exec
+fingerprint: 191cb907
+recorded_at: "2026-05-17T16:47:07Z"
+payload:
+    stdout: |
+        [
+          {
+            "actions": "discussed \u003cenvironment_context\u003e \u003ccwd\u003e/tmp/usp-e2e-project…",
+            "project": "/tmp/usp-e2e-project-b",
+            "id": "sess_01krvdabk8fy1t30jws65t32hm",
+            "source": "codex",
+            "started": "2026-05-17T16:46:41Z",
+            "native_id": "019e36d5-2e68-7f83-a182-5cc98ba18a34",
+            "turns": 7
+          }
+        ]
+    stderr: |
+        xrr: mode=record cassette_dir=/cassettes
+        {"phase":"sessions","at":"2026-05-17T16:47:07.013051024Z","item":"loading sessions"}
+        {"phase":"sessions","at":"2026-05-17T16:47:07.022832409Z","item":"loading sessions","ok":true}
+    exit_code: 0

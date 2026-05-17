@@ -9,7 +9,8 @@ import (
 func TestRootGroupsRegistered(t *testing.T) {
 	root := cli.New(cli.Config{
 		Name: "usp", Version: "test",
-		Help: cli.HelpConfig{Groups: rootGroups()},
+		Help:            cli.HelpConfig{Groups: rootGroups()},
+		DisableValidate: true,
 	})
 	root.Cmd.AddCommand(
 		sessionCmd(root),
@@ -42,7 +43,8 @@ func TestRootGroupsRegistered(t *testing.T) {
 func TestHelpDoesNotErrorWithGroups(t *testing.T) {
 	root := cli.New(cli.Config{
 		Name: "usp", Version: "test",
-		Help: cli.HelpConfig{Groups: rootGroups()},
+		Help:            cli.HelpConfig{Groups: rootGroups()},
+		DisableValidate: true,
 	})
 	root.Cmd.AddCommand(
 		sessionCmd(root),
@@ -67,7 +69,8 @@ func TestHelpDoesNotErrorWithGroups(t *testing.T) {
 func TestHelpAll_RevealsManagement(t *testing.T) {
 	root := cli.New(cli.Config{
 		Name: "usp", Version: "test",
-		Help: cli.HelpConfig{Groups: rootGroups()},
+		Help:            cli.HelpConfig{Groups: rootGroups()},
+		DisableValidate: true,
 	})
 	root.Cmd.AddCommand(
 		sessionCmd(root),

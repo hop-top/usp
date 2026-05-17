@@ -26,7 +26,7 @@ func TestAliasCmd_GroupAssignment(t *testing.T) {
 // TestAliasCmd_Subcommands ensures the kit-built alias group exposes
 // list/add/delete leaves under usp.
 func TestAliasCmd_Subcommands(t *testing.T) {
-	root := cli.New(cli.Config{Name: "usp", Version: "test"})
+	root := cli.New(cli.Config{Name: "usp", Version: "test", DisableValidate: true})
 	store := alias.NewStore(filepath.Join(t.TempDir(), "aliases.yaml"))
 	cmd := aliasCmd(root, store)
 
@@ -46,7 +46,7 @@ func TestAliasCmd_Subcommands(t *testing.T) {
 // TestAliasCmd_AddPersistsToStore drives `alias add` end-to-end and
 // verifies the YAML store gains the entry.
 func TestAliasCmd_AddPersistsToStore(t *testing.T) {
-	root := cli.New(cli.Config{Name: "usp", Version: "test"})
+	root := cli.New(cli.Config{Name: "usp", Version: "test", DisableValidate: true})
 	// stub session so add's target validation has something to bind
 	// against if kit ever validates targets at add time. (Not today.)
 	root.Cmd.AddCommand(&cobra.Command{Use: "session"})

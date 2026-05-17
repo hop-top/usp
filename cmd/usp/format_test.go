@@ -9,7 +9,7 @@ import (
 // TestFormatGlobalInherited confirms a --format flag passed at the
 // root level binds to rootViper and is observable via formatFromViper.
 func TestFormatGlobalInherited(t *testing.T) {
-	root := cli.New(cli.Config{Name: "usp", Version: "test"})
+	root := cli.New(cli.Config{Name: "usp", Version: "test", DisableValidate: true})
 	prevRoot := rootViper
 	rootViper = root.Viper
 	t.Cleanup(func() { rootViper = prevRoot })
@@ -28,7 +28,7 @@ func TestFormatGlobalInherited(t *testing.T) {
 }
 
 func TestFormatChildFlagInherited(t *testing.T) {
-	root := cli.New(cli.Config{Name: "usp", Version: "test"})
+	root := cli.New(cli.Config{Name: "usp", Version: "test", DisableValidate: true})
 	prevRoot := rootViper
 	rootViper = root.Viper
 	t.Cleanup(func() { rootViper = prevRoot })

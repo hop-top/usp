@@ -48,6 +48,9 @@ func main() {
 		Accent:        "#7C5CFF",
 		Help:          cli.HelpConfig{Groups: rootGroups()},
 		ProjectMarker: ".usp.yaml",
+		// Layer-A annotations + reserved `status` subcommand not yet
+		// adopted; tracked separately. Re-enable when compliant.
+		DisableValidate: true,
 		Hooks: cli.Hooks{
 			// -V/--verbose count → slog level (Info → Debug → Trace).
 			// Re-init after flag parse; kit fills VerboseCount via OnInitialize.

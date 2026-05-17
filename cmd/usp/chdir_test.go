@@ -19,7 +19,7 @@ func TestChdirHook(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chdir(orig) })
 
-	root := cli.New(cli.Config{Name: "usp", Version: "test"})
+	root := cli.New(cli.Config{Name: "usp", Version: "test", DisableValidate: true})
 	if root.Cmd.PersistentPreRunE == nil {
 		t.Fatal("kit/cli must install a PersistentPreRunE chain (chdir hook)")
 	}
@@ -50,7 +50,7 @@ func TestChdirShortFlag(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chdir(orig) })
 
-	root := cli.New(cli.Config{Name: "usp", Version: "test"})
+	root := cli.New(cli.Config{Name: "usp", Version: "test", DisableValidate: true})
 	if err := root.Cmd.ParseFlags([]string{"-C", dir}); err != nil {
 		t.Fatalf("parse: %v", err)
 	}

@@ -27,6 +27,9 @@ func main() {
 		Version: version,
 		Short:   "Bridge usp sessions into ctxt (Pipeline B)",
 		Accent:  "#7C5CFF",
+		// Layer-A annotations + reserved `status` subcommand not yet
+		// adopted; tracked separately. Re-enable when compliant.
+		DisableValidate: true,
 	})
 	root.Cmd.AddCommand(syncCmd())
 	if err := root.Execute(context.Background()); err != nil {

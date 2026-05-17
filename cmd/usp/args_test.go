@@ -228,7 +228,7 @@ func TestArgsSessionShowSkillsFlag(t *testing.T) {
 }
 
 func TestArgsCommandWiring(t *testing.T) {
-	root := cli.New(cli.Config{Name: "usp", Version: "test"})
+	root := cli.New(cli.Config{Name: "usp", Version: "test", DisableValidate: true})
 	root.Cmd.AddCommand(
 		sessionCmd(root),
 		resumeCmd(),

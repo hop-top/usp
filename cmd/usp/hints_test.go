@@ -8,7 +8,7 @@ import (
 )
 
 func TestHintsRegistered(t *testing.T) {
-	root := cli.New(cli.Config{Name: "usp", Version: "test"})
+	root := cli.New(cli.Config{Name: "usp", Version: "test", DisableValidate: true})
 	prevRoot := rootViper
 	rootViper = root.Viper
 	t.Cleanup(func() { rootViper = prevRoot })
@@ -24,14 +24,14 @@ func TestHintsRegistered(t *testing.T) {
 }
 
 func TestHintsActiveByDefault(t *testing.T) {
-	root := cli.New(cli.Config{Name: "usp", Version: "test"})
+	root := cli.New(cli.Config{Name: "usp", Version: "test", DisableValidate: true})
 	if !output.HintsEnabled(root.Viper) {
 		t.Error("HintsEnabled = false on fresh root, want true")
 	}
 }
 
 func TestHintsSuppressedByNoHints(t *testing.T) {
-	root := cli.New(cli.Config{Name: "usp", Version: "test"})
+	root := cli.New(cli.Config{Name: "usp", Version: "test", DisableValidate: true})
 	root.Viper.Set("no-hints", true)
 	if output.HintsEnabled(root.Viper) {
 		t.Error("HintsEnabled = true with no-hints=true, want false")

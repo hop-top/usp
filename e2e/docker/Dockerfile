@@ -1,5 +1,6 @@
 # E2E test environment for usp.
-# Fat container: all 4 CLI agents + usp + xrr + Go toolchain.
+# Fat container: all 4 CLI agents + usp + Go toolchain (xrr is consumed
+# as a Go library via internal/xrrutil, not as a binary).
 #
 # Build:
 #   docker build -f e2e/docker/Dockerfile -t usp-e2e .
@@ -74,10 +75,6 @@ RUN go mod download
 COPY . .
 RUN go build -o /usr/local/bin/usp ./cmd/usp
 RUN usp --version
-
-# ── Install xrr ────────────────────────────────────────────────
-RUN go install hop.top/xrr/go/cmd/xrr@latest
-RUN xrr --version
 
 # ── Runtime env ─────────────────────────────────────────────────
 ENV XRR_MODE="record"

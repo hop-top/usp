@@ -43,7 +43,7 @@ When you open the PR:
 ```sh
 git clone https://github.com/hop-top/usp.git
 cd usp
-make check    # build + test + lint
+make build test    # build + test (matches what blocking CI gates on)
 ```
 
 See [`make help`](Makefile) for the full target list. The most
@@ -53,11 +53,18 @@ common ones:
 |---|---|
 | `make build` | Build `usp` + `usp-ctxt` into `bin/` |
 | `make test` | Run all Go tests |
-| `make lint` | `go vet` + `golangci-lint` |
+| `make lint` | `go vet`, plus `golangci-lint` if installed |
+| `make check` | `build` + `test` + `lint` |
 | `make tidy` | `go mod tidy` |
 | `make install` | Build + install to `$XDG_BIN_HOME` (default `~/.local/bin`) |
 
-You'll need **Go 1.26+**.
+You'll need **Go 1.26+**. `golangci-lint` is optional but
+recommended — install per
+<https://golangci-lint.run/welcome/install/> to surface the same
+findings CI reports as advisory. Note: usp currently carries 26
+pre-existing lint findings (errcheck, misspell, staticcheck,
+gofmt, ineffassign); `make check` will fail until those are
+cleared — use `make build test` until then.
 
 ## I want to understand how usp is organized
 

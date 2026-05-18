@@ -53,8 +53,9 @@ vet: ## Run go vet
 	$(GOENV) $(GO) vet $(PKG)
 
 lint: vet ## Run lint checks (vet + golangci-lint if installed)
+	@mkdir -p $(GOCACHE)
 	@if command -v golangci-lint >/dev/null 2>&1; then \
-	  GOFLAGS=-buildvcs=false golangci-lint run $(PKG); \
+	  $(GOENV) GOFLAGS="-buildvcs=false $(GOFLAGS)" golangci-lint run $(PKG); \
 	else \
 	  echo "golangci-lint not installed — skipping (install: https://golangci-lint.run/welcome/install/)"; \
 	fi

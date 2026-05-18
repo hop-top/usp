@@ -4,9 +4,19 @@ project_name: usp
 # Tags are shaped `usp/v<version>` (release-please monorepo
 # convention). GoReleaser's `monorepo:` block strips this natively
 # but is Pro-only. The goreleaser-on-tag.yml reusable workflow in
-# hop-top/.github derives the bare semver in shell and exposes it
-# as `BARE_VERSION` + `RELEASE_TAG` on the GoReleaser step's
-# environment — both referenced via {{ .Env.* }} below.
+# hop-top/.github sidesteps this by synthesizing a local `v<bare>`
+# git tag at the same commit and setting GORELEASER_CURRENT_TAG to
+# it, so {{.Version}} and {{.Tag}} resolve normally in this file.
+#
+# The reusable workflow also disables GoReleaser's own release
+# publishing (release.disable: true below) and uploads the dist/*
+# artifacts to the real release-please-created release afterwards
+# via `gh release upload`. The release tag itself stays as
+# `usp/v<version>` — only the value GoReleaser sees is rewritten.
+#
+# RELEASE_TAG env var holds the real prefixed tag and is used in
+# the Homebrew formula URL, where the asset path must match the
+# real GitHub Release tag.
 #
 # Reference: https://github.com/hop-top/.github/blob/main/docs/binaries/go.md
 
@@ -19,7 +29,7 @@ builds:
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
     ldflags:
-      - -s -w -X main.version={{ .Env.BARE_VERSION }}
+      - -s -w -X main.version={{ .Version }}
 
   - id: usp-ctxt
     main: ./cmd/usp-ctxt
@@ -29,12 +39,12 @@ builds:
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
     ldflags:
-      - -s -w -X main.version={{ .Env.BARE_VERSION }}
+      - -s -w -X main.version={{ .Version }}
 
 archives:
   - id: usp
     ids: [usp, usp-ctxt]
-    name_template: "usp_{{ .Env.BARE_VERSION }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "usp_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
         formats: [zip]
@@ -48,15 +58,12 @@ changelog:
   disable: true
 
 release:
-  github:
-    owner: hop-top
-    name: usp
-  draft: false
-  prerelease: auto
-  # release-please created the GitHub Release at tag-cut time; let
-  # goreleaser append binary artifacts to that existing release
-  # rather than fail because the release already exists.
-  mode: append
+  # The reusable goreleaser-on-tag.yml workflow uploads dist/* to
+  # the real release-please-created release via `gh release upload`
+  # after the build. GoReleaser OSS can't target a release with a
+  # different tag name than the current git tag (release.tag: is
+  # Pro-only), so we disable its own release publishing entirely.
+  disable: true
 
 brews:
   - name: usp
@@ -69,7 +76,9 @@ brews:
     description: "Universal Sessions Protocol — find any coding session across any AI assistant."
     license: MIT
     # {{ .Env.RELEASE_TAG }} is the literal `usp/v<version>` tag,
-    # which is what the GitHub Release URL uses for asset downloads.
+    # which is the path segment GitHub Releases use for asset
+    # downloads. {{.Tag}} here would resolve to the synthesized
+    # bare tag — wrong for the URL.
     url_template: "https://github.com/hop-top/usp/releases/download/{{ .Env.RELEASE_TAG }}/{{ .ArtifactName }}"
     install: |
       bin.install "usp"

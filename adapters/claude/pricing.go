@@ -17,9 +17,9 @@ type modelRate struct {
 // modelRates is the per-model rate table. Values from Anthropic
 // pricing page as of 2026-04-29.
 var modelRates = map[string]modelRate{
-	"claude-opus-4-7":            {inputPerM: 15.00, outputPerM: 75.00},
-	"claude-sonnet-4-6":          {inputPerM: 3.00, outputPerM: 15.00},
-	"claude-haiku-4-5-20251001":  {inputPerM: 1.00, outputPerM: 5.00},
+	"claude-opus-4-7":           {inputPerM: 15.00, outputPerM: 75.00},
+	"claude-sonnet-4-6":         {inputPerM: 3.00, outputPerM: 15.00},
+	"claude-haiku-4-5-20251001": {inputPerM: 1.00, outputPerM: 5.00},
 }
 
 // costUSD computes total session cost in USD given token counts.

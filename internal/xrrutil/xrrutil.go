@@ -39,7 +39,7 @@ func ensureSession() {
 	if dir == "" {
 		dir = os.TempDir()
 	}
-	os.MkdirAll(dir, 0o755)
+	_ = os.MkdirAll(dir, 0o755)
 	session = xrr.NewSession(
 		xrr.Mode(Mode()),
 		xrr.NewFileCassette(dir),

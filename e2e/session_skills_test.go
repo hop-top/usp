@@ -182,7 +182,7 @@ func TestSessionSkillsExtractAndFilter(t *testing.T) {
 }
 
 // TestSessionSkillsJSONRoundTrip exercises the documented schema:
-// every SkillEvent must serialise+deserialise without loss when
+// every SkillEvent must serialize+deserialize without loss when
 // callers consume `--format json`.
 func TestSessionSkillsJSONRoundTrip(t *testing.T) {
 	home := t.TempDir()

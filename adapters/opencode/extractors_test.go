@@ -43,7 +43,7 @@ func TestOpencodeExtract(t *testing.T) {
 			nil,
 		},
 		{
-			"unrecognised key",
+			"unrecognized key",
 			session.ToolCall{Name: "edit",
 				Input: `{"target":"a.go"}`},
 			nil,
@@ -52,7 +52,7 @@ func TestOpencodeExtract(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := opencodeExtract(tt.tc)
-			if !reflect.DeepEqual(got, tt.want) && !(len(got) == 0 && len(tt.want) == 0) {
+			if !reflect.DeepEqual(got, tt.want) && (len(got) != 0 || len(tt.want) != 0) {
 				t.Errorf("opencodeExtract = %v, want %v", got, tt.want)
 			}
 		})

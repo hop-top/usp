@@ -191,4 +191,3 @@ func (c *execClient) Upsert(ctx context.Context, p Projection) error {
 	}
 	return nil
 }
-

@@ -69,7 +69,7 @@ func sessionListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer svc.Close()
+			defer func() { _ = svc.Close() }()
 
 			var items []api.SessionListItem
 			req := api.ListSessionsRequest{
@@ -195,7 +195,7 @@ func sessionSearchCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer svc.Close()
+			defer func() { _ = svc.Close() }()
 
 			var matched []session.Session
 			if err := runWithProgress(c.Context(), "sessions", "searching sessions", func() error {

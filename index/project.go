@@ -61,7 +61,7 @@ func (idx *ProjectIndex) Register(
 	if err != nil {
 		return fmt.Errorf("index: prepare: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	for cli, key := range entries {
 		if _, err := stmt.Exec(cwd, cli, key, now); err != nil {

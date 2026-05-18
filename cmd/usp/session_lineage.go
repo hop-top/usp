@@ -28,7 +28,7 @@ func sessionLineageCmd() *cobra.Command {
 			if err != nil {
 				return tryNativeLineage(input)
 			}
-			defer store.Close()
+			defer func() { _ = store.Close() }()
 
 			// Lineage store keys by native id today; if user passed
 			// a TypeID, fall through to the native adapter resolver

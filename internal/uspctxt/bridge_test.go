@@ -43,7 +43,7 @@ func (f *fakeSource) ListSince(cli string, since time.Time) ([]session.Session, 
 	return out, nil
 }
 
-func (f *fakeSource) Turns(_ , id string) ([]session.Turn, error) {
+func (f *fakeSource) Turns(_, id string) ([]session.Turn, error) {
 	if f.turnsErr != nil {
 		return nil, f.turnsErr
 	}

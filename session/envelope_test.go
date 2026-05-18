@@ -158,4 +158,3 @@ func TestTurnPreservesUnknownMetadataKeys(t *testing.T) {
 		t.Errorf("Metadata[other] = %v, want 42", got.Metadata["other"])
 	}
 }
-

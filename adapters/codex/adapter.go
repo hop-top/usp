@@ -177,7 +177,7 @@ func generateUUIDv7(t time.Time) string {
 	ms := uint64(t.UnixMilli())
 	binary.BigEndian.PutUint32(b[0:4], uint32(ms>>16))
 	binary.BigEndian.PutUint16(b[4:6], uint16(ms&0xFFFF))
-	rand.Read(b[6:])
+	_, _ = rand.Read(b[6:])
 	b[6] = (b[6] & 0x0F) | 0x70 // version 7
 	b[8] = (b[8] & 0x3F) | 0x80 // variant 10
 	h := hex.EncodeToString(b[:])
@@ -186,7 +186,7 @@ func generateUUIDv7(t time.Time) string {
 
 func randHex(n int) string {
 	b := make([]byte, n)
-	rand.Read(b)
+	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
 }
 

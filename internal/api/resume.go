@@ -95,7 +95,7 @@ func (s *Service) ResumeSession(ctx context.Context, req ResumeSessionRequest) (
 	if err != nil {
 		return nil, fmt.Errorf("lineage store: %w", err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	uspID := generateLineageID()
 	if err := store.CreateSession(uspID, req.ProjectCWD); err != nil {

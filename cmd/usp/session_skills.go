@@ -68,7 +68,7 @@ Filters AND-combine: --session, --cli, --project, --name,
 			if err != nil {
 				return err
 			}
-			defer svc.Close()
+			defer func() { _ = svc.Close() }()
 
 			var events []session.SkillEvent
 			if err := runWithProgress(c.Context(), "skills", "loading skill events", func() error {

@@ -396,7 +396,7 @@ func TestStreamTurns_ToolResultUserTurn(t *testing.T) {
 		{
 			"uuid": "e1", "type": "user",
 			"timestamp": "2026-04-10T10:00:00.000Z",
-			"cwd": "/foo/bar", "sessionId": "sess-tr",
+			"cwd":       "/foo/bar", "sessionId": "sess-tr",
 			"message": map[string]any{
 				"role":    "user",
 				"content": "read main.go",
@@ -461,7 +461,7 @@ func TestStreamTurns_ToolResultInlined(t *testing.T) {
 		{
 			"uuid": "e1", "type": "user",
 			"timestamp": "2026-04-10T10:00:00.000Z",
-			"cwd": "/foo/bar", "sessionId": "sess-inline",
+			"cwd":       "/foo/bar", "sessionId": "sess-inline",
 			"message": map[string]any{
 				"role":    "user",
 				"content": "read main.go",
@@ -553,7 +553,7 @@ func TestStreamTurns_MultipleToolCallsInlined(t *testing.T) {
 		{
 			"uuid": "e1", "type": "assistant",
 			"timestamp": "2026-04-10T10:00:00.000Z",
-			"cwd": "/foo/bar", "sessionId": "sess-multi",
+			"cwd":       "/foo/bar", "sessionId": "sess-multi",
 			"message": map[string]any{
 				"role": "assistant",
 				"content": []map[string]any{
@@ -619,7 +619,7 @@ func TestStreamTurns_ConsecutiveAssistantToolUse(t *testing.T) {
 		{
 			"uuid": "e1", "type": "assistant",
 			"timestamp": "2026-04-10T10:00:00.000Z",
-			"cwd": "/foo/bar", "sessionId": "sess-consec",
+			"cwd":       "/foo/bar", "sessionId": "sess-consec",
 			"message": map[string]any{
 				"role": "assistant",
 				"content": []map[string]any{

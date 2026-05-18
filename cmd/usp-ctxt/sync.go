@@ -39,7 +39,7 @@ func runSync(ctx context.Context, p syncParams, errw, outw io.Writer) error {
 
 	src := newAdapterSource(p.cliFilter, p.projectFlag)
 
-	var client uspctxt.CtxtClient = uspctxt.NewExecClient(p.ctxtServer)
+	client := uspctxt.NewExecClient(p.ctxtServer)
 	if p.dryRun {
 		client = dryRunClient{w: errw}
 	}

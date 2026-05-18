@@ -60,7 +60,7 @@ func TestCodexShellExtract(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := codexExtract(tt.tc)
-			if !reflect.DeepEqual(got, tt.want) && !(len(got) == 0 && len(tt.want) == 0) {
+			if !reflect.DeepEqual(got, tt.want) && (len(got) != 0 || len(tt.want) != 0) {
 				t.Errorf("codexExtract = %v, want %v", got, tt.want)
 			}
 		})
@@ -115,7 +115,7 @@ func TestCodexApplyPatchExtract(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := codexExtract(tt.tc)
-			if !reflect.DeepEqual(got, tt.want) && !(len(got) == 0 && len(tt.want) == 0) {
+			if !reflect.DeepEqual(got, tt.want) && (len(got) != 0 || len(tt.want) != 0) {
 				t.Errorf("codexExtract = %v, want %v", got, tt.want)
 			}
 		})

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.0-alpha.2](https://github.com/hop-top/usp/compare/usp/v0.1.0-alpha.1...usp/v0.1.0-alpha.2) (2026-05-18)
+
+
+### Features
+
+* **ci:** publish to Scoop bucket on tag ([a38ff25](https://github.com/hop-top/usp/commit/a38ff25ede1f8439381f63351db982486121a7ca))
+* **ci:** publish to Scoop bucket on tag (Windows install) ([c38ad07](https://github.com/hop-top/usp/commit/c38ad0763eef18e850a10dcd20787facaa7ddb3b))
+
 ## [0.1.0-alpha.1](https://github.com/hop-top/usp/compare/usp/v0.1.0-alpha.0...usp/v0.1.0-alpha.1) (2026-05-18)
 
 

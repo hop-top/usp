@@ -121,11 +121,23 @@ namespace registry, and
 [`internal/uspctxt/projection.go`](internal/uspctxt/projection.go)
 for the mention/hint vocabulary emitted into ctxt.
 
+## Install
+
+| Platform | Command |
+|---|---|
+| macOS / Linux | `brew install hop-top/tap/usp` |
+| Windows | `scoop bucket add hop-top https://github.com/hop-top/scoop-bucket && scoop install usp` |
+| Any with Go ≥ 1.26 | `go install hop.top/usp/cmd/usp@latest` |
+| Pre-built binary | Download from [Releases](https://github.com/hop-top/usp/releases/latest) |
+
+The `usp-ctxt` bridge (see [The ctxt bridge](#the-ctxt-bridge) above)
+installs alongside `usp` in the Homebrew + Scoop paths. For the
+Go path, install it separately:
+`go install hop.top/usp/cmd/usp-ctxt@latest`.
+
 ## Quickstart
 
 ```sh
-go install hop.top/usp/cmd/usp@latest
-
 usp doctor               # what's installed, what's readable
 usp setup                # index detected CLIs
 usp session list         # all sessions, all CLIs, sorted

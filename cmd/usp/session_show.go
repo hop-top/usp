@@ -18,7 +18,7 @@ func allAdapters() map[string]session.SessionAdapter {
 	return api.DefaultAdapters()
 }
 
-// adapterOrder returns adapter names to try, prioritised by ID format.
+// adapterOrder returns adapter names to try, prioritized by ID format.
 func adapterOrder(id string) []string {
 	return api.AdapterOrder(id)
 }
@@ -104,7 +104,7 @@ func sessionShowCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer svc.Close()
+			defer func() { _ = svc.Close() }()
 
 			if id == "" {
 				pickerProject := project

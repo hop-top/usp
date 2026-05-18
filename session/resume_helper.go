@@ -13,7 +13,7 @@ import (
 // Adapters call this from their ResumeCmd implementation so the
 // argv shape stays in lockstep with go/core/uxp/invoke/adapters/<cli>.
 // On Build errors (e.g. an adapter rejecting an invariant), the
-// helper returns a best-effort fallback — empty slice, signalling
+// helper returns a best-effort fallback — empty slice, signaling
 // the caller to surface the error rather than spawn a broken
 // command.
 //

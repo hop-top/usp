@@ -44,9 +44,9 @@ func ToolCapabilityFor(cli uxp.CLIName, nativeName string) (invoke.ToolCapabilit
 
 // UniversalToolLabel returns the rendering label for a tool call:
 //   - "shell.exec (Bash)"            when the universal name and a
-//                                     concrete native name are known,
+//     concrete native name are known,
 //   - "[native:Bash]"                 when the CLI is unknown or no
-//                                     mapping exists.
+//     mapping exists.
 //
 // The label is stable: same inputs → same string, suitable for
 // transcript rendering and snapshot tests.

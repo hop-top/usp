@@ -63,7 +63,7 @@ mapping exists. Filters AND-combine: --session, --cli, --project,
 			if err != nil {
 				return err
 			}
-			defer svc.Close()
+			defer func() { _ = svc.Close() }()
 
 			var events []session.ToolEvent
 			if err := runWithProgress(c.Context(), "tools", "loading tool events", func() error {

@@ -493,7 +493,7 @@ func TestSessionShow_CrossCliDisambiguation(t *testing.T) {
 }
 
 // TestSessionShow_JSONSchemaAllTurnFields verifies that all documented
-// JSON turn fields are present when marshalling (US-0004 AC3).
+// JSON turn fields are present when marshaling (US-0004 AC3).
 func TestSessionShow_JSONSchemaAllTurnFields(t *testing.T) {
 	home := t.TempDir()
 	a := setupClaude(t, home)

@@ -49,7 +49,7 @@ func TestGeminiExtract(t *testing.T) {
 			nil,
 		},
 		{
-			"no recognised key",
+			"no recognized key",
 			session.ToolCall{Name: "x",
 				Input: `{"other":"a.go"}`},
 			nil,
@@ -58,7 +58,7 @@ func TestGeminiExtract(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := geminiExtract(tt.tc)
-			if !reflect.DeepEqual(got, tt.want) && !(len(got) == 0 && len(tt.want) == 0) {
+			if !reflect.DeepEqual(got, tt.want) && (len(got) != 0 || len(tt.want) != 0) {
 				t.Errorf("geminiExtract = %v, want %v", got, tt.want)
 			}
 		})

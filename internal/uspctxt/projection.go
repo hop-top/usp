@@ -18,16 +18,16 @@
 //   - @usp.lineage.<id>           opts.LineageRoot when set
 //   - @scope.<slug>               opts.Scope when set
 //   - @file.<slug>                files touched per session.MentionExtractor;
-//                                 writes (Edit/Write/MultiEdit/NotebookEdit)
-//                                 sort first; capped at opts.MaxFileMentions
+//     writes (Edit/Write/MultiEdit/NotebookEdit)
+//     sort first; capped at opts.MaxFileMentions
 //   - @model.<slug>               sess.Metadata["assistant.model"]
 //
 // Hint vocabulary (post T-0081):
 //   - #hash:<short>               content fingerprint (always)
 //   - #cost:low|med|high          from sess.Metadata["usage.cost_usd"]
-//                                 (<0.10 low, <1.0 med, >=1.0 high)
+//     (<0.10 low, <1.0 med, >=1.0 high)
 //   - #tokens:small|med|large     from input+output tokens
-//                                 (<=10k small, <=100k med, >100k large)
+//     (<=10k small, <=100k med, >100k large)
 //
 // Two pure halves are kept here (projection + state) so the cmd
 // layer can wire them to os/exec + filesystem without bringing
@@ -63,11 +63,16 @@ const (
 //
 // Body: markdown text fed to ctxt via stdin / --file.
 // Mentions: canonical identity refs (`@namespace.slug`) joined into
-//   `ctxt analyze --mentions`. Primary identity per spec §4.4.
+//
+//	`ctxt analyze --mentions`. Primary identity per spec §4.4.
+//
 // Hints: classifier tags joined into `ctxt analyze --hints`. v0.1
-//   only emits `#hash:<short>`; identity moved to mentions.
+//
+//	only emits `#hash:<short>`; identity moved to mentions.
+//
 // SourceKey: external dedup hint (`--source-key`); secondary signal
-//   for ctxt's external-id catalog. Format: "usp/<session-id>".
+//
+//	for ctxt's external-id catalog. Format: "usp/<session-id>".
 //
 // ContentHash backs a fallback dedup path: callers can compare
 // hashes to short-circuit re-ingest of unchanged sessions before

@@ -66,7 +66,7 @@ func runSetup(ctx context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("open index: %w", err)
 	}
-	defer idx.Close()
+	defer func() { _ = idx.Close() }()
 
 	rows := make([]setupRow, 0, len(names))
 

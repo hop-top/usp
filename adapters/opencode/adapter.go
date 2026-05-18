@@ -499,27 +499,27 @@ type capMap struct{}
 
 var capCoverage = map[string]uxp.Support{
 	// 16 native
-	"session.list":         uxp.Native,
-	"session.resume":       uxp.Native,
-	"session.transcript":   uxp.Native,
-	"session.compaction":   uxp.Native,
-	"session.diff":         uxp.Native,
-	"session.snapshot":     uxp.Native,
-	"project.grouping":     uxp.Native,
-	"project.metadata":     uxp.Native,
-	"tool.use":             uxp.Native,
-	"tool.result":          uxp.Native,
-	"permission.mode":      uxp.Native,
-	"todo.state":           uxp.Native,
-	"workspace.branch":     uxp.Native,
-	"event.sourcing":       uxp.Native,
-	"plugin.lifecycle":     uxp.Native,
-	"file.mirror":          uxp.Native,
+	"session.list":       uxp.Native,
+	"session.resume":     uxp.Native,
+	"session.transcript": uxp.Native,
+	"session.compaction": uxp.Native,
+	"session.diff":       uxp.Native,
+	"session.snapshot":   uxp.Native,
+	"project.grouping":   uxp.Native,
+	"project.metadata":   uxp.Native,
+	"tool.use":           uxp.Native,
+	"tool.result":        uxp.Native,
+	"permission.mode":    uxp.Native,
+	"todo.state":         uxp.Native,
+	"workspace.branch":   uxp.Native,
+	"event.sourcing":     uxp.Native,
+	"plugin.lifecycle":   uxp.Native,
+	"file.mirror":        uxp.Native,
 	// 2 workaround
-	"session.search":       uxp.Workaround,
-	"session.export":       uxp.Workaround,
+	"session.search": uxp.Workaround,
+	"session.export": uxp.Workaround,
 	// 1 missing
-	"project.stable.id":    uxp.Missing,
+	"project.stable.id": uxp.Missing,
 }
 
 func (c *capMap) Supports(dim string) bool {
@@ -534,4 +534,3 @@ func (c *capMap) Coverage() map[string]uxp.Support {
 	}
 	return out
 }
-

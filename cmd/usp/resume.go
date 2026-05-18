@@ -33,7 +33,7 @@ func resumeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer svc.Close()
+			defer func() { _ = svc.Close() }()
 
 			if id == "" {
 				selected, err := promptSelectSessionID(c.Context(), svc,

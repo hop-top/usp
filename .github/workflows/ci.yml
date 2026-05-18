@@ -20,16 +20,6 @@ jobs:
       - run: go vet ./...
       - run: go test -race ./...
 
-  # `.golangci.yml` ships with this repo, but the CI lint job is
-  # advisory until the existing baseline of 26 findings (errcheck,
-  # misspell, staticcheck, gofmt, ineffassign) is cleared in a
-  # follow-up. To see them locally: install golangci-lint
-  # (https://golangci-lint.run/welcome/install/) then `make lint`.
-  #
-  # `continue-on-error` lives on the step rather than the job so the
-  # job's overall conclusion stays SUCCESS and mergeStateStatus
-  # stays CLEAN — without this, branch protection treats the
-  # advisory job as a hard failure.
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -38,6 +28,5 @@ jobs:
         with:
           go-version: "1.26"
       - uses: golangci/golangci-lint-action@v6
-        continue-on-error: true
         with:
           version: v2.1.0

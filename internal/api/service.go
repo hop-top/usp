@@ -489,7 +489,7 @@ var (
 	reOpenCode = regexp.MustCompile(`^ses_[a-z0-9]{26}$`)
 )
 
-// AdapterOrder returns adapter names to try, prioritised by ID format.
+// AdapterOrder returns adapter names to try, prioritized by ID format.
 func AdapterOrder(id string) []string {
 	switch {
 	case reUUIDv4.MatchString(id):

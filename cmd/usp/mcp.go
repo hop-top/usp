@@ -17,7 +17,7 @@ func mcpCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer svc.Close()
+			defer func() { _ = svc.Close() }()
 
 			if err := mcp.New(svc).Serve(
 				c.Context(), os.Stdin, os.Stdout,

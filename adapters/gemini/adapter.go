@@ -243,7 +243,7 @@ func (a *Adapter) InjectSession(cwd string, turns []session.Turn) (string, error
 		LastUpdated: nowStr,
 		Kind:        "main",
 	})
-	lastUpdated := nowStr
+	var lastUpdated string
 	for _, turn := range turns {
 		ts := turn.Timestamp.UTC()
 		if ts.IsZero() {

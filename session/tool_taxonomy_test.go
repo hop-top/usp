@@ -11,9 +11,9 @@ import (
 func TestToolCapabilityFor_KnownNatives(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		cli      uxp.CLIName
-		native   string
-		wantUni  string
+		cli     uxp.CLIName
+		native  string
+		wantUni string
 	}{
 		{uxp.CLIClaude, "Bash", "shell.exec"},
 		{uxp.CLIClaude, "Read", "file.read"},
@@ -66,9 +66,9 @@ func TestToolCapabilityFor_UnknownNative(t *testing.T) {
 func TestUniversalToolLabel(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		cli      uxp.CLIName
-		native   string
-		want     string
+		cli    uxp.CLIName
+		native string
+		want   string
 	}{
 		{uxp.CLIClaude, "Bash", "shell.exec (Bash)"},
 		{uxp.CLICodex, "exec_command", "shell.exec (exec_command)"},

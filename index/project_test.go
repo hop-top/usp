@@ -112,10 +112,10 @@ type mockAdapter struct {
 
 var _ session.SessionAdapter = (*mockAdapter)(nil)
 
-func (m *mockAdapter) CLI() uxp.CLIName              { return m.cli }
+func (m *mockAdapter) CLI() uxp.CLIName                   { return m.cli }
 func (m *mockAdapter) Detect() (*uxp.DetectResult, error) { return nil, nil }
 func (m *mockAdapter) Capabilities() uxp.CapabilityMap    { return nil }
-func (m *mockAdapter) ProjectKey(string) string            { return m.key }
+func (m *mockAdapter) ProjectKey(string) string           { return m.key }
 func (m *mockAdapter) ListSessions(string) ([]session.Session, error) {
 	return nil, nil
 }

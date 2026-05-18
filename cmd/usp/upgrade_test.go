@@ -24,7 +24,7 @@ func TestUpgradeCmd_Registered(t *testing.T) {
 }
 
 // TestUpgradeCmd_HelpText sanity checks the rendered help mentions
-// "version" / "install" so users can recognise it as a self-upgrade.
+// "version" / "install" so users can recognize it as a self-upgrade.
 func TestUpgradeCmd_HelpText(t *testing.T) {
 	cmd := upgradeCmd()
 	long := cmd.Long

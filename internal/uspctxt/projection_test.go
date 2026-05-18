@@ -560,7 +560,6 @@ func TestProject_IdentityMentionsOrder_NoRegression(t *testing.T) {
 	}
 }
 
-
 // --- T-0081: telemetry-derived signals --------------------------------------
 
 // TestProject_Hints_CostBand: boundary table for cost band thresholds.

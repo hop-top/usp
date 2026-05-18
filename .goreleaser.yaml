@@ -1,0 +1,78 @@
+version: 2
+project_name: usp
+
+# Tags are shaped `usp/v<version>` (release-please monorepo
+# convention). GoReleaser's `monorepo:` block strips this natively
+# but is Pro-only. The goreleaser-on-tag.yml reusable workflow in
+# hop-top/.github derives the bare semver in shell and exposes it
+# as `BARE_VERSION` + `RELEASE_TAG` on the GoReleaser step's
+# environment — both referenced via {{ .Env.* }} below.
+#
+# Reference: https://github.com/hop-top/.github/blob/main/docs/binaries/go.md
+
+builds:
+  - id: usp
+    main: ./cmd/usp
+    binary: usp
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath, -buildvcs=false]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{ .Env.BARE_VERSION }}
+
+  - id: usp-ctxt
+    main: ./cmd/usp-ctxt
+    binary: usp-ctxt
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath, -buildvcs=false]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{ .Env.BARE_VERSION }}
+
+archives:
+  - id: usp
+    ids: [usp, usp-ctxt]
+    name_template: "usp_{{ .Env.BARE_VERSION }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  # release-please already authors the changelog from Conventional
+  # Commits; don't duplicate it in the GitHub Release body.
+  disable: true
+
+release:
+  github:
+    owner: hop-top
+    name: usp
+  draft: false
+  prerelease: auto
+  # release-please created the GitHub Release at tag-cut time; let
+  # goreleaser append binary artifacts to that existing release
+  # rather than fail because the release already exists.
+  mode: append
+
+brews:
+  - name: usp
+    repository:
+      owner: hop-top
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/hop-top/usp
+    description: "Universal Sessions Protocol — find any coding session across any AI assistant."
+    license: MIT
+    # {{ .Env.RELEASE_TAG }} is the literal `usp/v<version>` tag,
+    # which is what the GitHub Release URL uses for asset downloads.
+    url_template: "https://github.com/hop-top/usp/releases/download/{{ .Env.RELEASE_TAG }}/{{ .ArtifactName }}"
+    install: |
+      bin.install "usp"
+      bin.install "usp-ctxt"
+    test: |
+      system "#{bin}/usp", "--version"

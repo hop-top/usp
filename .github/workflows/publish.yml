@@ -1,0 +1,21 @@
+name: publish
+
+on:
+  push:
+    tags: ['*/v*']
+
+jobs:
+  publish:
+    permissions:
+      contents: read
+      id-token: write
+    uses: hop-top/.github/.github/workflows/publish-on-tag.yml@v0
+    secrets:
+      GH_MIRROR_PAT: ${{ secrets.GH_MIRROR_PAT }}
+    with:
+      homepage: https://github.com/hop-top/usp
+      ecosystems: |
+        usp:
+          dir: .
+          ecosystem: go
+          mirror: hop-top/usp

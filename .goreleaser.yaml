@@ -85,3 +85,18 @@ brews:
       bin.install "usp-ctxt"
     test: |
       system "#{bin}/usp", "--version"
+
+scoops:
+  - name: usp
+    repository:
+      owner: hop-top
+      name: scoop-bucket
+      branch: main
+      token: "{{ .Env.SCOOP_BUCKET_TOKEN }}"
+    homepage: https://github.com/hop-top/usp
+    description: "Universal Sessions Protocol — find any coding session across any AI assistant."
+    license: MIT
+    # Same RELEASE_TAG reasoning as brews above: the literal
+    # `usp/v<version>` tag is the path segment GitHub Releases use
+    # for asset downloads.
+    url_template: "https://github.com/hop-top/usp/releases/download/{{ .Env.RELEASE_TAG }}/{{ .ArtifactName }}"

@@ -1,5 +1,9 @@
 # USP — Universal Sessions Protocol
 
+[![Release](https://img.shields.io/github/v/release/hop-top/usp?include_prereleases&sort=semver)](https://github.com/hop-top/usp/releases)
+[![CI](https://github.com/hop-top/usp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hop-top/usp/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Find any coding session across any AI assistant. One command.
 
 ## Jobs this solves
@@ -246,4 +250,14 @@ and data flow.
 
 ## Status
 
-Alpha (`v0.0.1-alpha.1`). Envelope schema may change.
+Alpha. Envelope schema may change before the first stable release.
+See [CHANGELOG.md](CHANGELOG.md) for what's landed and
+[releases](https://github.com/hop-top/usp/releases) for the
+latest tag.
+
+## License
+
+[MIT](LICENSE). Contributions welcome — see
+[CONTRIBUTING.md](CONTRIBUTING.md) and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). For security
+disclosures, see [SECURITY.md](SECURITY.md).

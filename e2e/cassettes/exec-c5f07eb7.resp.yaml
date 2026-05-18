@@ -1,0 +1,42 @@
+xrr: "1"
+adapter: exec
+fingerprint: c5f07eb7
+recorded_at: "2026-05-17T16:47:04Z"
+error: exit status 1
+payload:
+    stdout: ""
+    stderr: |
+        Reading additional input from stdin...
+        OpenAI Codex v0.130.0
+        --------
+        workdir: /tmp/usp-e2e-project-b
+        model: gpt-5.5
+        provider: openai
+        approval: never
+        sandbox: read-only
+        reasoning effort: none
+        reasoning summaries: none
+        session id: 019e36d5-2e68-7f83-a182-5cc98ba18a34
+        --------
+        user
+        say hello
+        warning: Codex could not find bubblewrap on PATH. Install bubblewrap with your OS package manager. See the sandbox prerequisites: https://developers.openai.com/codex/concepts/sandboxing#prerequisites. Codex will use the bundled bubblewrap in the meantime.
+        2026-05-17T16:46:41.897578Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://api.openai.com/v1/responses
+        2026-05-17T16:46:42.406195Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://api.openai.com/v1/responses
+        2026-05-17T16:46:43.477372Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://api.openai.com/v1/responses
+        ERROR: Reconnecting... 2/5
+        2026-05-17T16:46:45.844089Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://api.openai.com/v1/responses
+        ERROR: Reconnecting... 3/5
+        2026-05-17T16:46:47.572420Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://api.openai.com/v1/responses
+        ERROR: Reconnecting... 4/5
+        2026-05-17T16:46:49.652556Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://api.openai.com/v1/responses
+        ERROR: Reconnecting... 5/5
+        2026-05-17T16:46:54.833030Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://api.openai.com/v1/responses
+        ERROR: Reconnecting... 1/5
+        ERROR: Reconnecting... 2/5
+        ERROR: Reconnecting... 3/5
+        ERROR: Reconnecting... 4/5
+        ERROR: Reconnecting... 5/5
+        ERROR: unexpected status 401 Unauthorized: Missing bearer or basic authentication in header, url: https://api.openai.com/v1/responses, cf-ray: 9fd41a10febba2f4-YUL, request id: req_5822c9a97d6d4e0e97a04449abc09889
+        ERROR: unexpected status 401 Unauthorized: Missing bearer or basic authentication in header, url: https://api.openai.com/v1/responses, cf-ray: 9fd41a10febba2f4-YUL, request id: req_5822c9a97d6d4e0e97a04449abc09889
+    exit_code: 1

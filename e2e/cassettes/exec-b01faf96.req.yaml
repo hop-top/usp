@@ -1,0 +1,9 @@
+xrr: "1"
+adapter: exec
+fingerprint: b01faf96
+recorded_at: "2026-05-17T16:47:06Z"
+payload:
+    argv:
+        - opencode
+        - -p
+        - say hello

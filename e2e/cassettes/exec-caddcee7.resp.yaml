@@ -1,0 +1,9 @@
+xrr: "1"
+adapter: exec
+fingerprint: caddcee7
+recorded_at: "2026-05-17T16:46:40Z"
+error: exit status 1
+payload:
+    stdout: ""
+    stderr: "xrr: mode=record cassette_dir=/cassettes\n          \n   ERROR  \n          \n  Unknown flag: --inject-only.                                                                                        \n\n  Try --help for usage.\n\n"
+    exit_code: 1

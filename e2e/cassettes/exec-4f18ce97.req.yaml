@@ -1,0 +1,9 @@
+xrr: "1"
+adapter: exec
+fingerprint: 4f18ce97
+recorded_at: "2026-05-17T16:47:07Z"
+payload:
+    argv:
+        - git
+        - init
+        - -q

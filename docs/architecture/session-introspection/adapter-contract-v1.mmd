@@ -1,0 +1,34 @@
+classDiagram
+    class SessionAdapter {
+        <<interface>>
+        +CLI() CLIName
+        +ListSessions(cwd) []Session
+        +GetSession(id) Session
+        +StreamTurns(id) chan Turn
+        +ProjectKey(cwd) string
+    }
+    class SkillExtractor {
+        <<interface>>
+        +ExtractSkills(id) []SkillEvent
+    }
+    class ClaudeAdapter {
+        +ExtractSkills(id) []SkillEvent
+        -parseSlashCommand(content)
+        -assistantSkillCalls(msg)
+        -extractSkillToolResults(msg)
+    }
+    class CodexAdapter {
+        ~no SkillExtractor~
+    }
+    class GeminiAdapter {
+        ~no SkillExtractor~
+    }
+    class OpenCodeAdapter {
+        ~no SkillExtractor~
+    }
+
+    SessionAdapter <|.. ClaudeAdapter
+    SessionAdapter <|.. CodexAdapter
+    SessionAdapter <|.. GeminiAdapter
+    SessionAdapter <|.. OpenCodeAdapter
+    SkillExtractor <|.. ClaudeAdapter

@@ -1,0 +1,8 @@
+# Release configuration — admin or release team only.
+# CODEOWNERS itself is included so the gate can't be removed
+# without release-team review.
+.github/CODEOWNERS @hop-top/release
+.github/release-please-config.json @hop-top/release
+.github/.release-please-manifest.json @hop-top/release
+.github/workflows/release-please.yml @hop-top/release
+.github/workflows/publish.yml @hop-top/release

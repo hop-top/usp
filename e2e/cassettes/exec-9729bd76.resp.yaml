@@ -1,0 +1,31 @@
+xrr: "1"
+adapter: exec
+fingerprint: 9729bd76
+recorded_at: "2026-05-17T16:47:06Z"
+payload:
+    stdout: |
+        [
+          {
+            "actions": "discussed \u003cenvironment_context\u003e \u003ccwd\u003e/tmp/usp-e2e-project…",
+            "project": "/tmp/usp-e2e-project-b",
+            "id": "sess_01krvdabk8fy1t30jws65t32hm",
+            "source": "codex",
+            "started": "2026-05-17T16:46:41Z",
+            "native_id": "019e36d5-2e68-7f83-a182-5cc98ba18a34",
+            "turns": 7
+          },
+          {
+            "actions": "discussed \u003cenvironment_context\u003e \u003ccwd\u003e/tmp/TestSingleSessi…",
+            "project": "/tmp/TestSingleSessionLifecyclecodex400870587/001",
+            "id": "sess_01krvd9nw4fgsbb9tbe2r5nj6h",
+            "source": "codex",
+            "started": "2026-05-17T16:46:19Z",
+            "native_id": "019e36d4-d784-7c32-b5a7-4b70b05ac8d1",
+            "turns": 7
+          }
+        ]
+    stderr: |
+        xrr: mode=record cassette_dir=/cassettes
+        {"phase":"sessions","at":"2026-05-17T16:47:06.574307555Z","item":"loading sessions"}
+        {"phase":"sessions","at":"2026-05-17T16:47:06.609143636Z","item":"loading sessions","ok":true}
+    exit_code: 0

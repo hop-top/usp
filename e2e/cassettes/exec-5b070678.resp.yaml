@@ -1,0 +1,10 @@
+xrr: "1"
+adapter: exec
+fingerprint: 5b070678
+recorded_at: "2026-05-17T16:46:18Z"
+error: exit status 1
+payload:
+    stdout: ""
+    stderr: |
+        --dangerously-skip-permissions cannot be used with root/sudo privileges for security reasons
+    exit_code: 1

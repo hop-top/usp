@@ -1,0 +1,17 @@
+services:
+  usp-e2e:
+    container_name: usp-e2e
+    build:
+      context: ../..
+      dockerfile: e2e/docker/Dockerfile
+      args:
+        CLAUDE_VERSION: "${CLAUDE_VERSION:-latest}"
+        CODEX_VERSION: "${CODEX_VERSION:-latest}"
+        GEMINI_VERSION: "${GEMINI_VERSION:-latest}"
+        OPENCODE_VERSION: "${OPENCODE_VERSION:-latest}"
+    volumes:
+      - ../cassettes:/cassettes
+    environment:
+      - XRR_MODE=${XRR_MODE:-replay}
+      - XRR_CASSETTE_DIR=/cassettes
+    working_dir: /src/usp

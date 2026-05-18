@@ -1,0 +1,9 @@
+xrr: "1"
+adapter: exec
+fingerprint: 85ee3904
+recorded_at: "2026-05-17T16:47:05Z"
+payload:
+    argv:
+        - gemini
+        - -p
+        - say hello

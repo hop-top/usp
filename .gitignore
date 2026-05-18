@@ -1,0 +1,26 @@
+# Build output
+bin/
+.cache/
+dist/
+
+# Go vendor
+vendor/
+
+# SQLite
+*.db
+*.db-wal
+*.db-shm
+
+# xray cache
+.xray_*
+.xray_cache.db
+
+# Binaries
+*.exe
+*.test
+
+# macOS
+.DS_Store
+
+# Go coverage
+coverage.out

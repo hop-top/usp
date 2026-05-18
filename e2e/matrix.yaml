@@ -1,0 +1,27 @@
+# Version matrix for E2E testing.
+# Each CLI lists 3 latest minor release lines.
+# Exact patch versions resolved at build time by resolve-matrix.sh.
+
+clis:
+  claude:
+    package: "@anthropic-ai/claude-code"
+    minors: ["1.0", "2.0", "2.1"]
+  codex:
+    package: "@openai/codex"
+    minors: ["0.118", "0.119", "0.120"]
+  gemini:
+    package: "@google/gemini-cli"
+    minors: ["0.35", "0.36", "0.37"]
+  opencode:
+    package: "opencode-ai"
+    minors: ["1.2", "1.3", "1.4"]
+
+# Test combos (not full permutation)
+combos:
+  latest:
+    description: "All CLIs at newest minor"
+    # Resolved to latest patch of each CLI's newest minor
+  mixed:
+    description: "Claude oldest + Codex newest + Gemini mid + OpenCode oldest"
+  oldest:
+    description: "All CLIs at oldest supported minor"

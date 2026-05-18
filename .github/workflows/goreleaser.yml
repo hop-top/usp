@@ -1,0 +1,17 @@
+name: goreleaser
+
+on:
+  push:
+    tags: ['usp/v*']
+
+jobs:
+  goreleaser:
+    # TODO: switch to @v0 once hop-top/.github cuts the release
+    # that includes goreleaser-on-tag.yml. Tracking: PR #23 in
+    # hop-top/.github.
+    uses: hop-top/.github/.github/workflows/goreleaser-on-tag.yml@main
+    secrets:
+      RELEASE_BOT_APP_ID: ${{ secrets.RELEASE_BOT_APP_ID }}
+      RELEASE_BOT_PRIVATE_KEY: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+    with:
+      homebrew-tap-repo: homebrew-tap

@@ -1,6 +1,7 @@
 # Build output
 bin/
 .cache/
+dist/
 
 # Go vendor
 vendor/

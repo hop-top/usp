@@ -10,7 +10,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"hop.top/kit/uxp"
+	"hop.top/kit/go/core/uxp"
+	kitopencode "hop.top/kit/go/core/uxp/invoke/adapters/opencode"
 	"hop.top/usp/session"
 
 	_ "modernc.org/sqlite"
@@ -151,13 +152,13 @@ func (a *Adapter) ListSessions(cwd string) ([]session.Session, error) {
 		}
 
 		s := session.Session{
-			ID:         id,
 			CLI:        uxp.CLIOpenCode,
 			ProjectCwd: cwd,
 			StartedAt:  msToTime(createdAt),
 			TurnCount:  turnCount,
 			Metadata:   make(map[string]any),
 		}
+		s.SetIDs(id)
 		if title.Valid && title.String != "" {
 			s.Metadata["title"] = title.String
 		}
@@ -200,12 +201,12 @@ func (a *Adapter) GetSession(id string) (*session.Session, error) {
 	).Scan(&turnCount)
 
 	s := &session.Session{
-		ID:        id,
 		CLI:       uxp.CLIOpenCode,
 		StartedAt: msToTime(createdAt),
 		TurnCount: turnCount,
 		Metadata:  make(map[string]any),
 	}
+	s.SetIDs(id)
 	if directory.Valid {
 		s.ProjectCwd = directory.String
 	}
@@ -216,7 +217,39 @@ func (a *Adapter) GetSession(id string) (*session.Session, error) {
 		t := msToTime(updatedAt)
 		s.EndedAt = &t
 	}
+	if model := lastAssistantModel(db, id); model != "" {
+		s.Metadata["assistant.model"] = model
+	}
 	return s, nil
+}
+
+// lastAssistantModel queries assistant message rows for the most recent
+// non-empty modelID. Returns "" when none exist (e.g. user-only DBs or
+// schemas without modelID). Errors swallowed — telemetry is best-effort.
+func lastAssistantModel(db *sql.DB, sessionID string) string {
+	rows, err := db.Query(`
+		SELECT data FROM message
+		WHERE session_id = ?
+		ORDER BY created_at DESC`, sessionID,
+	)
+	if err != nil {
+		return ""
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var data string
+		if err := rows.Scan(&data); err != nil {
+			continue
+		}
+		var md messageData
+		if err := json.Unmarshal([]byte(data), &md); err != nil {
+			continue
+		}
+		if md.Role == "assistant" && md.ModelID != "" {
+			return md.ModelID
+		}
+	}
+	return ""
 }
 
 // StreamTurns returns a channel of turns for the given session.
@@ -285,9 +318,11 @@ func (a *Adapter) StreamTurns(id string) (<-chan session.Turn, error) {
 }
 
 // messageData is the JSON structure stored in message.data.
+// ModelID is observed on assistant rows in real OpenCode DBs.
 type messageData struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
+	ModelID string `json:"modelID,omitempty"`
 }
 
 // partDataJSON is the JSON structure stored in part.data.
@@ -345,7 +380,7 @@ func appendPartData(turn *session.Turn, data string) {
 			tc.Input = string(pd.Input)
 		}
 		if pd.Output != "" {
-			tc.Output = pd.Output
+			tc.Output = session.StripANSI(pd.Output)
 		}
 		turn.ToolCalls = append(turn.ToolCalls, tc)
 	}
@@ -451,8 +486,12 @@ func (a *Adapter) InjectSession(cwd string, turns []session.Turn) (string, error
 }
 
 // ResumeCmd returns the CLI command to resume an injected session.
+// Delegates to kit's invocation facade so the argv stays in lockstep
+// with the cross-CLI matrix in go/core/uxp/README.md. (kit's adapter
+// emits the correct `opencode run --session <id>` form; the previous
+// in-tree string was missing the `run` subcommand.)
 func (a *Adapter) ResumeCmd(nativeID string) []string {
-	return []string{"opencode", "--session", nativeID}
+	return session.ResumeCmdFor(kitopencode.New(), nativeID)
 }
 
 // capMap implements uxp.CapabilityMap for OpenCode.

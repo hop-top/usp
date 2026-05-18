@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"hop.top/kit/go/core/xdg"
 )
 
 // State is the high-water-mark per CLI persisted between bridge runs.
@@ -29,14 +31,14 @@ type CLIState struct {
 // breaking schema changes.
 const SchemaVersion = 1
 
-// DefaultStatePath is the spec-defined location for the bridge
-// state file. Returns absolute path under the user's home.
+// DefaultStatePath is the spec-defined XDG data location for the bridge
+// state file.
 func DefaultStatePath() (string, error) {
-	home, err := os.UserHomeDir()
+	path, err := xdg.DataFile("usp-ctxt", "last_run.json")
 	if err != nil {
-		return "", fmt.Errorf("uspctxt: home dir: %w", err)
+		return "", fmt.Errorf("uspctxt: data file: %w", err)
 	}
-	return filepath.Join(home, ".local", "share", "usp-ctxt", "last_run.json"), nil
+	return path, nil
 }
 
 // LoadState reads the state file at path. Missing file returns an

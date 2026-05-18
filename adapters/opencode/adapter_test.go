@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"hop.top/kit/uxp"
+	"hop.top/kit/go/core/uxp"
 	"hop.top/usp/session"
 
 	_ "modernc.org/sqlite"
@@ -204,8 +204,8 @@ func TestListSessions(t *testing.T) {
 	}
 
 	s := sessions[0]
-	if s.ID != "ses_abc123" {
-		t.Errorf("ID = %q, want %q", s.ID, "ses_abc123")
+	if s.NativeID != "ses_abc123" {
+		t.Errorf("NativeID = %q, want %q", s.NativeID, "ses_abc123")
 	}
 	if s.CLI != uxp.CLIOpenCode {
 		t.Errorf("CLI = %q, want %q", s.CLI, uxp.CLIOpenCode)
@@ -245,8 +245,8 @@ func TestGetSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSession: %v", err)
 	}
-	if s.ID != "ses_abc123" {
-		t.Errorf("ID = %q, want %q", s.ID, "ses_abc123")
+	if s.NativeID != "ses_abc123" {
+		t.Errorf("NativeID = %q, want %q", s.NativeID, "ses_abc123")
 	}
 	if s.ProjectCwd != "/foo/bar" {
 		t.Errorf("ProjectCwd = %q, want /foo/bar", s.ProjectCwd)
@@ -385,7 +385,11 @@ func TestStreamTurnsOrdering(t *testing.T) {
 func TestResumeCmd(t *testing.T) {
 	a := New()
 	cmd := a.ResumeCmd("ses_abc123")
-	want := []string{"opencode", "--session", "ses_abc123"}
+	// opencode's resume is `opencode run --session <id>`; the `run`
+	// subcommand is required. The previous in-tree string omitted
+	// it (likely a latent bug); kit's invocation facade emits the
+	// correct form.
+	want := []string{"opencode", "run", "--session", "ses_abc123"}
 	if len(cmd) != len(want) {
 		t.Fatalf("ResumeCmd len = %d, want %d", len(cmd), len(want))
 	}
@@ -401,6 +405,75 @@ func TestResumeAdapterInterface(t *testing.T) {
 	var ra session.ResumeAdapter = New()
 	if ra.CLI() != uxp.CLIOpenCode {
 		t.Errorf("CLI() = %q, want %q", ra.CLI(), uxp.CLIOpenCode)
+	}
+}
+
+func TestGetSession_AssistantModelFromMessage(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "opencode.db")
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ddl := range []string{
+		`CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT,
+			title TEXT, directory TEXT, created_at INTEGER,
+			updated_at INTEGER)`,
+		`CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT,
+			data TEXT, created_at INTEGER)`,
+		`CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT,
+			session_id TEXT, data TEXT, created_at INTEGER)`,
+	} {
+		if _, err := db.Exec(ddl); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	a := New(WithDBPath(dbPath))
+	projectID := a.ProjectKey("/p")
+
+	if _, err := db.Exec(
+		`INSERT INTO session VALUES (?, ?, ?, ?, ?, ?)`,
+		"ses_model", projectID, "T", "/p", 1000, 2000,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO message VALUES (?, ?, ?, ?)`,
+		"m1", "ses_model", `{"role":"user","content":"hi"}`, 1000,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO message VALUES (?, ?, ?, ?)`,
+		"m2", "ses_model",
+		`{"role":"assistant","content":"hello","modelID":"glm-4.7"}`,
+		2000,
+	); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	s, err := a.GetSession("ses_model")
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if got := s.Metadata["assistant.model"]; got != "glm-4.7" {
+		t.Errorf("assistant.model = %v, want glm-4.7", got)
+	}
+}
+
+func TestGetSession_AssistantModelAbsent(t *testing.T) {
+	// Existing fixture has no modelID on message rows.
+	_, a := setupFixtureDB(t)
+	s, err := a.GetSession("ses_abc123")
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if _, ok := s.Metadata["assistant.model"]; ok {
+		t.Errorf("assistant.model should be absent, got %v",
+			s.Metadata["assistant.model"])
 	}
 }
 

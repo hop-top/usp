@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"hop.top/kit/uxp"
+	"hop.top/kit/go/core/uxp"
 	"hop.top/usp/adapters/claude"
 	"hop.top/usp/adapters/codex"
 	"hop.top/usp/adapters/gemini"
@@ -19,6 +19,7 @@ import (
 )
 
 const fixtureCwd = "/tmp/replay-project"
+const geminiFixtureSessionID = "88888888-8888-4888-8888-888888888888"
 
 func writeJSONL(t *testing.T, path string, events []map[string]any) {
 	t.Helper()
@@ -69,7 +70,7 @@ func testClaudeLifecycle(t *testing.T) {
 		{
 			"uuid": "r1", "type": "user",
 			"timestamp": "2026-04-11T08:00:00Z",
-			"cwd": fixtureCwd, "sessionId": "replay-sess-01",
+			"cwd":       fixtureCwd, "sessionId": "replay-sess-01",
 			"message": map[string]any{"role": "user", "content": "start server"},
 		},
 		{
@@ -87,7 +88,7 @@ func testClaudeLifecycle(t *testing.T) {
 			"uuid": "r3", "type": "user",
 			"timestamp": "2026-04-11T08:01:00Z",
 			"sessionId": "replay-sess-01",
-			"message": map[string]any{"role": "user", "content": "add TLS"},
+			"message":   map[string]any{"role": "user", "content": "add TLS"},
 		},
 	})
 
@@ -164,19 +165,46 @@ func testGeminiLifecycle(t *testing.T) {
 		},
 	)
 
-	histDir := filepath.Join(home, ".gemini", "history", alias)
-	writeJSON(t, filepath.Join(histDir, "replay-gem-01.json"),
-		map[string]any{
-			"history": []map[string]any{
-				{"role": "user", "content": "scaffold app"},
-				{"role": "model", "content": "app scaffolded"},
-				{"role": "user", "content": "add tests"},
+	projectDir := filepath.Join(home, ".gemini", "tmp", alias)
+	if err := os.MkdirAll(filepath.Join(projectDir, "chats"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(projectDir, ".project_root"), []byte(fixtureCwd), 0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	writeJSONL(t,
+		filepath.Join(projectDir, "chats",
+			"session-2026-04-11T10-00-"+geminiFixtureSessionID[:8]+".jsonl"),
+		[]map[string]any{
+			{
+				"sessionId":   geminiFixtureSessionID,
+				"projectHash": "hash",
+				"startTime":   "2026-04-11T10:00:00Z",
+				"lastUpdated": "2026-04-11T10:00:03Z",
+				"kind":        "main",
+			},
+			{
+				"id": "g1", "type": "user",
+				"timestamp": "2026-04-11T10:00:00Z",
+				"content":   []map[string]string{{"text": "scaffold app"}},
+			},
+			{
+				"id": "g2", "type": "gemini",
+				"timestamp": "2026-04-11T10:00:02Z",
+				"content":   "app scaffolded",
+			},
+			{
+				"id": "g3", "type": "user",
+				"timestamp": "2026-04-11T10:00:03Z",
+				"content":   []map[string]string{{"text": "add tests"}},
 			},
 		},
 	)
 
 	a := &gemini.Adapter{HomeDir: home}
-	verifyLifecycle(t, a, "replay-gem-01", uxp.CLIGemini, fixtureCwd, 3)
+	verifyLifecycle(t, a, geminiFixtureSessionID, uxp.CLIGemini, fixtureCwd, 3)
 }
 
 func testOpenCodeLifecycle(t *testing.T) {
@@ -268,13 +296,13 @@ func verifyLifecycle(
 	}
 	found := false
 	for _, s := range sessions {
-		if s.ID == wantID {
+		if s.NativeID == wantID {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("ListSessions did not contain session %q", wantID)
+		t.Errorf("ListSessions did not contain native session %q", wantID)
 	}
 
 	// 2. GetSession

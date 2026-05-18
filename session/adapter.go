@@ -1,6 +1,6 @@
 package session
 
-import "hop.top/kit/uxp"
+import "hop.top/kit/go/core/uxp"
 
 // SessionAdapter extends uxp.Adapter with session-specific operations.
 // Each CLI adapter implements this interface.

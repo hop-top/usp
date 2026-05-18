@@ -10,6 +10,25 @@
 // emergent classifier signals (`#hash:` for content fingerprinting).
 // `--source-key` is kept as a secondary dedup hint per spec §4.4.
 //
+// Mention vocabulary (post T-0079 / T-0081):
+//   - @usp.session.<id>           anchor
+//   - @agent.<slug>               opts.Agent
+//   - @cli.<slug>                 sess.CLI
+//   - @project.<slug>             projectSlug(sess.ProjectCwd)
+//   - @usp.lineage.<id>           opts.LineageRoot when set
+//   - @scope.<slug>               opts.Scope when set
+//   - @file.<slug>                files touched per session.MentionExtractor;
+//                                 writes (Edit/Write/MultiEdit/NotebookEdit)
+//                                 sort first; capped at opts.MaxFileMentions
+//   - @model.<slug>               sess.Metadata["assistant.model"]
+//
+// Hint vocabulary (post T-0081):
+//   - #hash:<short>               content fingerprint (always)
+//   - #cost:low|med|high          from sess.Metadata["usage.cost_usd"]
+//                                 (<0.10 low, <1.0 med, >=1.0 high)
+//   - #tokens:small|med|large     from input+output tokens
+//                                 (<=10k small, <=100k med, >100k large)
+//
 // Two pure halves are kept here (projection + state) so the cmd
 // layer can wire them to os/exec + filesystem without bringing
 // either concern into the core. Tests live in projection_test.go
@@ -21,6 +40,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -86,6 +106,10 @@ type ProjectOpts struct {
 
 	// MaxBodyBytes truncates the rendered body. Zero => default 8192.
 	MaxBodyBytes int
+
+	// MaxFileMentions caps @file mentions emitted per session.
+	// Excess silently dropped. Zero => default 50.
+	MaxFileMentions int
 }
 
 // Project renders a Projection from a Session + its turns.
@@ -103,15 +127,18 @@ func Project(sess session.Session, turns []session.Turn, opts ProjectOpts) Proje
 	if opts.MaxBodyBytes <= 0 {
 		opts.MaxBodyBytes = 8192
 	}
+	if opts.MaxFileMentions <= 0 {
+		opts.MaxFileMentions = 50
+	}
 
-	mentions := buildMentions(sess, opts)
+	mentions := buildMentions(sess, turns, opts)
 	body := renderBody(sess, turns, opts, mentions)
 	if len(body) > opts.MaxBodyBytes {
 		body = body[:opts.MaxBodyBytes] + "\n\n_(body truncated)_\n"
 	}
 	hash := sha256Hex(body)
 
-	hints := buildHints(hash)
+	hints := buildHints(sess, hash)
 	return Projection{
 		SourceKey:   "usp/" + sess.ID,
 		Mentions:    mentions,
@@ -132,10 +159,15 @@ func (p Projection) MentionsString() string {
 }
 
 // buildMentions emits the canonical identity refs in spec-prescribed
-// order: @usp.session, @agent, @cli, @project, @usp.lineage, @scope.
-// Slugs lowercased per mentions.md §Syntax. Anchor is @usp.session;
-// other namespaces are conditional on inputs being non-empty.
-func buildMentions(sess session.Session, opts ProjectOpts) []string {
+// order: @usp.session, @agent, @cli, @project, @usp.lineage, @scope,
+// then per-session @file mentions, then @model. Slugs lowercased per
+// mentions.md §Syntax. Anchor is @usp.session; other namespaces are
+// conditional on inputs.
+//
+// @file mentions are capped at opts.MaxFileMentions. Files touched by
+// write tools (Edit, Write, MultiEdit, NotebookEdit) sort before files
+// only read/searched. @model is emitted when assistant.model present.
+func buildMentions(sess session.Session, turns []session.Turn, opts ProjectOpts) []string {
 	out := []string{}
 	out = append(out, "@usp.session."+strings.ToLower(strings.TrimSpace(sess.ID)))
 	if opts.Agent != "" {
@@ -154,7 +186,70 @@ func buildMentions(sess session.Session, opts ProjectOpts) []string {
 	if scope := strings.ToLower(strings.TrimSpace(opts.Scope)); scope != "" {
 		out = append(out, "@scope."+scope)
 	}
+	out = append(out, fileMentions(sess, turns, opts.MaxFileMentions)...)
+	if slug := modelSlug(metaString(sess.Metadata, "assistant.model")); slug != "" {
+		out = append(out, "@model."+slug)
+	}
 	return out
+}
+
+// writeTools is the set of tool names whose @file mentions get
+// priority placement (before read-only refs) per spec §file mentions.
+var writeTools = map[string]bool{
+	"Edit": true, "Write": true, "MultiEdit": true, "NotebookEdit": true,
+}
+
+// fileMentions runs the per-CLI extractor over each tool call,
+// buckets by write-vs-read, dedupes globally (first-seen wins), and
+// caps at max. Order: writes (first-seen) then reads (first-seen).
+func fileMentions(sess session.Session, turns []session.Turn, max int) []string {
+	if max <= 0 {
+		return nil
+	}
+	fn := session.GetMentionExtractor(sess.CLI)
+	if fn == nil {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	var writes, reads []string
+	for _, t := range turns {
+		for _, c := range t.ToolCalls {
+			ms := fn(c)
+			for _, m := range ms {
+				if m == "" {
+					continue
+				}
+				if _, ok := seen[m]; ok {
+					continue
+				}
+				seen[m] = struct{}{}
+				if writeTools[c.Name] {
+					writes = append(writes, m)
+				} else {
+					reads = append(reads, m)
+				}
+			}
+		}
+	}
+	out := append(writes, reads...)
+	if len(out) > max {
+		out = out[:max]
+	}
+	return out
+}
+
+// modelSlug normalizes a model id into a `@model.<slug>` per mentions
+// registry: lowercased; `:`, `.`, `/` → `-`. Empty input => empty.
+func modelSlug(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ""
+	}
+	id = strings.ToLower(id)
+	id = strings.ReplaceAll(id, ":", "-")
+	id = strings.ReplaceAll(id, ".", "-")
+	id = strings.ReplaceAll(id, "/", "-")
+	return id
 }
 
 // projectSlug normalizes a cwd into a `@project.<slug>` per registry
@@ -170,10 +265,97 @@ func projectSlug(cwd string) string {
 	return base
 }
 
-// buildHints retains only the content-hash classifier; identity tags
-// have moved to mentions per spec §8.2.
-func buildHints(hash string) []string {
-	return []string{"#hash:" + hash[:16]}
+// buildHints emits classifier hints. #hash is always present;
+// telemetry-derived bands (#cost, #tokens) added when Metadata
+// supplies the source values. Identity tags moved to mentions
+// per spec §8.2.
+//
+// Cost bands (usage.cost_usd, USD): <0.10 low, <1.0 med, >=1.0 high.
+// Token buckets (input+output): <=10_000 small, <=100_000 med,
+// >100_000 large. "small/med/large" disambiguates from cost bands.
+func buildHints(sess session.Session, hash string) []string {
+	out := []string{"#hash:" + hash[:16]}
+	if cost, ok := metaFloat(sess.Metadata, "usage.cost_usd"); ok && cost > 0 {
+		out = append(out, "#cost:"+costBand(cost))
+	}
+	in, okIn := metaInt(sess.Metadata, "usage.tokens.input")
+	outTok, okOut := metaInt(sess.Metadata, "usage.tokens.output")
+	if okIn || okOut {
+		out = append(out, "#tokens:"+tokenBucket(in+outTok))
+	}
+	return out
+}
+
+func costBand(c float64) string {
+	switch {
+	case c < 0.10:
+		return "low"
+	case c < 1.0:
+		return "med"
+	default:
+		return "high"
+	}
+}
+
+func tokenBucket(n int) string {
+	switch {
+	case n <= 10_000:
+		return "small"
+	case n <= 100_000:
+		return "med"
+	default:
+		return "large"
+	}
+}
+
+// metaString reads a string-typed Metadata key. Missing or wrong-typed
+// keys return "".
+func metaString(m map[string]any, key string) string {
+	if m == nil {
+		return ""
+	}
+	v, ok := m[key].(string)
+	if !ok {
+		return ""
+	}
+	return v
+}
+
+// metaInt reads an int-typed Metadata key. Returns (0, false) when
+// missing or wrong-typed.
+func metaInt(m map[string]any, key string) (int, bool) {
+	if m == nil {
+		return 0, false
+	}
+	v, ok := m[key].(int)
+	if !ok {
+		return 0, false
+	}
+	return v, true
+}
+
+// metaInt64 reads an int64-typed Metadata key.
+func metaInt64(m map[string]any, key string) (int64, bool) {
+	if m == nil {
+		return 0, false
+	}
+	v, ok := m[key].(int64)
+	if !ok {
+		return 0, false
+	}
+	return v, true
+}
+
+// metaFloat reads a float64-typed Metadata key.
+func metaFloat(m map[string]any, key string) (float64, bool) {
+	if m == nil {
+		return 0, false
+	}
+	v, ok := m[key].(float64)
+	if !ok {
+		return 0, false
+	}
+	return v, true
 }
 
 func renderBody(sess session.Session, turns []session.Turn, opts ProjectOpts, mentions []string) string {
@@ -210,6 +392,13 @@ func renderBody(sess session.Session, turns []session.Turn, opts ProjectOpts, me
 		fmt.Fprintf(&b, "- %s\n", oneLine(p))
 	}
 
+	if intents := sessionIntents(turns); len(intents) > 0 {
+		b.WriteString("\n## Intents\n\n")
+		for _, n := range intents {
+			fmt.Fprintf(&b, "- /%s\n", n)
+		}
+	}
+
 	calls := flatToolCalls(turns, opts.MaxToolCalls)
 	b.WriteString("\n## Tool calls\n\n")
 	if len(calls) == 0 {
@@ -218,7 +407,52 @@ func renderBody(sess session.Session, turns []session.Turn, opts ProjectOpts, me
 	for _, c := range calls {
 		fmt.Fprintf(&b, "- %s: %s\n", c.Name, oneLine(c.Input))
 	}
+
+	if tel := renderTelemetry(sess); tel != "" {
+		b.WriteString("\n## Telemetry\n\n")
+		b.WriteString(tel)
+	}
 	return b.String()
+}
+
+// renderTelemetry emits a bullet list of telemetry signals from
+// Session.Metadata. Returns "" when no telemetry keys present so
+// the caller can omit the heading entirely.
+func renderTelemetry(sess session.Session) string {
+	model := metaString(sess.Metadata, "assistant.model")
+	in, okIn := metaInt(sess.Metadata, "usage.tokens.input")
+	outTok, okOut := metaInt(sess.Metadata, "usage.tokens.output")
+	dur, okDur := metaInt64(sess.Metadata, "performance.duration_ms")
+	cost, okCost := metaFloat(sess.Metadata, "usage.cost_usd")
+
+	if model == "" && !okIn && !okOut && !okDur && !okCost {
+		return ""
+	}
+	var b strings.Builder
+	if model != "" {
+		fmt.Fprintf(&b, "- model: %s\n", model)
+	}
+	if okIn || okOut {
+		fmt.Fprintf(&b, "- tokens: %d\n", in+outTok)
+	}
+	if okDur {
+		fmt.Fprintf(&b, "- duration: %s\n", formatDuration(dur))
+	}
+	if okCost {
+		fmt.Fprintf(&b, "- cost: %s\n", formatCost(cost))
+	}
+	return b.String()
+}
+
+func formatDuration(ms int64) string {
+	if ms >= 1000 {
+		return fmt.Sprintf("%.1fs", float64(ms)/1000.0)
+	}
+	return fmt.Sprintf("%dms", ms)
+}
+
+func formatCost(c float64) string {
+	return fmt.Sprintf("$%.2f", c)
 }
 
 func userPrompts(turns []session.Turn, max int) []string {
@@ -227,7 +461,17 @@ func userPrompts(turns []session.Turn, max int) []string {
 		if t.Role != session.RoleUser {
 			continue
 		}
-		s := strings.TrimSpace(t.Content)
+		if t.Subtype == "ide-notif" {
+			continue
+		}
+		var s string
+		if t.Subtype == "slash-command" {
+			if name := slashCommandName(t.Content); name != "" {
+				s = "/" + name
+			}
+		} else {
+			s = strings.TrimSpace(t.Content)
+		}
 		if s == "" {
 			continue
 		}
@@ -235,6 +479,49 @@ func userPrompts(turns []session.Turn, max int) []string {
 		if len(out) >= max {
 			break
 		}
+	}
+	return out
+}
+
+// slashCommandTagRE captures the inner name of <command-name>...</command-name>.
+var slashCommandTagRE = regexp.MustCompile(
+	`(?s)<command-name>(.*?)</command-name>`)
+
+// slashCommandName extracts a slash-command name from turn content.
+// Prefers <command-name>NAME</command-name>; falls back to the first
+// whitespace-bounded token starting with `/`. Leading `/` stripped.
+func slashCommandName(content string) string {
+	if m := slashCommandTagRE.FindStringSubmatch(content); len(m) == 2 {
+		name := strings.TrimSpace(m[1])
+		name = strings.TrimPrefix(name, "/")
+		return name
+	}
+	for _, tok := range strings.Fields(content) {
+		if strings.HasPrefix(tok, "/") {
+			return strings.TrimPrefix(tok, "/")
+		}
+	}
+	return ""
+}
+
+// sessionIntents returns distinct slash-command names invoked across
+// turns, ordered by first occurrence.
+func sessionIntents(turns []session.Turn) []string {
+	seen := map[string]struct{}{}
+	var out []string
+	for _, t := range turns {
+		if t.Role != session.RoleUser || t.Subtype != "slash-command" {
+			continue
+		}
+		name := slashCommandName(t.Content)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
 	}
 	return out
 }

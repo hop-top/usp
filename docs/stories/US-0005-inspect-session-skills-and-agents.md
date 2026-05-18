@@ -65,6 +65,11 @@ bad and avoid repeating mistakes.
   to ship first. Aggregation ACs may be deferred to a
   follow-up release if kit work isn't ready when
   T-0070/T-0071 land.
+- Sub-agent (Task tool) data layer landed via T-0082:
+  claude `isSidechain` turns now carry `Subtype="sidechain"`
+  + `Metadata["sidechain.parent_tool_use_id"]` and are
+  reordered after their parent dispatch in `StreamTurns`.
+  T-0071 consumes this signal to render the agents view.
 
 ## Deferred
 

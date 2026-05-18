@@ -35,9 +35,9 @@ echo "  Claude session: $SESSION_ID"
 
 # ── Step 3: Resume into Codex (inject-only) ──────────────────────
 echo "=== Step 3: Resume Claude -> Codex ==="
-# TODO: replace with `usp resume --session "$SESSION_ID" --tool codex --inject-only`
+# TODO: replace with `usp resume --session "$SESSION_ID" --cli codex --inject-only`
 #       once the flag is implemented in cmd/usp/resume.go
-usp resume --session "$SESSION_ID" --tool codex --inject-only 2>/dev/null \
+usp resume --session "$SESSION_ID" --cli codex --inject-only 2>/dev/null \
   || echo "  SKIP: --inject-only not yet implemented"
 
 CODEX_SESSION=$(usp session list --project "$PROJECT" --format json 2>/dev/null \
@@ -52,7 +52,7 @@ fi
 # ── Step 4: Resume into Gemini (inject-only) ─────────────────────
 echo "=== Step 4: Resume Codex -> Gemini ==="
 RESUME_FROM="${CODEX_SESSION:-$SESSION_ID}"
-usp resume --session "$RESUME_FROM" --tool gemini --inject-only 2>/dev/null \
+usp resume --session "$RESUME_FROM" --cli gemini --inject-only 2>/dev/null \
   || echo "  SKIP: --inject-only not yet implemented"
 
 GEMINI_SESSION=$(usp session list --project "$PROJECT" --format json 2>/dev/null \

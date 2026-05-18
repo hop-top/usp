@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"hop.top/usp/internal/sessionutil"
@@ -17,23 +17,25 @@ func sessionLineageCmd() *cobra.Command {
 		Short: "Show cross-CLI session lineage",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			id := args[0]
+			input := args[0]
 
-			home, err := os.UserHomeDir()
+			dbPath, err := lineageDBPath()
 			if err != nil {
-				return fmt.Errorf("home dir: %w", err)
+				return fmt.Errorf("lineage path: %w", err)
 			}
-			dbPath := filepath.Join(home, ".local", "state", "usp", "sessions.db")
 
 			store, err := lineage.Open(dbPath)
 			if err != nil {
-				return tryNativeLineage(id)
+				return tryNativeLineage(input)
 			}
 			defer store.Close()
 
-			sess, err := store.GetSession(id)
+			// Lineage store keys by native id today; if user passed
+			// a TypeID, fall through to the native adapter resolver
+			// which knows both forms.
+			sess, err := store.GetSession(input)
 			if err != nil {
-				return tryNativeLineage(id)
+				return tryNativeLineage(input)
 			}
 
 			printLineage(sess)
@@ -48,11 +50,14 @@ func tryNativeLineage(id string) error {
 	s, _, _, err := sessionutil.ResolveSessionID(
 		id, adapters, adapterOrder(id))
 	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return exitNotFound(err)
+		}
 		return err
 	}
 	s.Segments = []session.Segment{{
 		CLI:       s.CLI,
-		NativeID:  s.ID,
+		NativeID:  s.NativeID,
 		StartedAt: s.StartedAt,
 		TurnCount: s.TurnCount,
 	}}

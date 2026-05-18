@@ -4,7 +4,7 @@
 // It walks each detected CLI's session list since a high-water-mark,
 // projects each session into a ctxt-ready payload, and upserts
 // through the ctxt CLI (`ctxt analyze --source-key usp/<id>`).
-// State persists at ~/.local/share/usp-ctxt/last_run.json so re-runs
+// State persists under XDG data home at usp-ctxt/last_run.json so re-runs
 // only ingest new sessions.
 //
 // Spec: <labspace>/hop/docs/ingestion-retrieval/spec.md §4
@@ -12,11 +12,11 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
-	"hop.top/kit/cli"
+	"hop.top/kit/go/console/cli"
+	"hop.top/usp/internal/uspctxt"
 )
 
 var version = "dev"
@@ -27,6 +27,9 @@ func main() {
 		Version: version,
 		Short:   "Bridge usp sessions into ctxt (Pipeline B)",
 		Accent:  "#7C5CFF",
+		// Layer-A annotations + reserved `status` subcommand not yet
+		// adopted; tracked separately. Re-enable when compliant.
+		DisableValidate: true,
 	})
 	root.Cmd.AddCommand(syncCmd())
 	if err := root.Execute(context.Background()); err != nil {
@@ -41,7 +44,7 @@ func syncCmd() *cobra.Command {
 		ctxtServer  string
 		dryRun      bool
 		perTimeout  int
-		toolFilter  string
+		cliFilter   string
 		projectFlag string
 		verboseFlag bool
 	)
@@ -52,7 +55,7 @@ func syncCmd() *cobra.Command {
 		RunE: func(c *cobra.Command, _ []string) error {
 			path := statePath
 			if path == "" {
-				p, err := defaultStatePath()
+				p, err := uspctxt.DefaultStatePath()
 				if err != nil {
 					return err
 				}
@@ -65,7 +68,7 @@ func syncCmd() *cobra.Command {
 				ctxtServer:  ctxtServer,
 				dryRun:      dryRun,
 				perTimeout:  perTimeout,
-				toolFilter:  toolFilter,
+				cliFilter:   cliFilter,
 				projectFlag: projectFlag,
 				verbose:     verboseFlag,
 			}, os.Stderr, os.Stdout)
@@ -74,14 +77,14 @@ func syncCmd() *cobra.Command {
 	cmd.Flags().StringVar(&agent, "agent", "",
 		"Producer agent id (aps profile); also: $USP_CTXT_AGENT")
 	cmd.Flags().StringVar(&statePath, "state", "",
-		"State file path (default: ~/.local/share/usp-ctxt/last_run.json)")
+		"State file path (default: XDG data home usp-ctxt/last_run.json)")
 	cmd.Flags().StringVar(&ctxtServer, "ctxt-server", "",
 		"ctxt server URL (default: ctxt's own default)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false,
 		"Project + log; do not invoke ctxt or update state")
 	cmd.Flags().IntVar(&perTimeout, "per-call-timeout", 30,
 		"Per ctxt invocation timeout in seconds")
-	cmd.Flags().StringVar(&toolFilter, "tool", "",
+	cmd.Flags().StringVar(&cliFilter, "cli", "",
 		"Restrict to one CLI (claude, codex, gemini, opencode)")
 	cmd.Flags().StringVar(&projectFlag, "project", "",
 		"Restrict to a project cwd")
@@ -98,12 +101,4 @@ func pickAgent(flag, env string) string {
 		return env
 	}
 	return ""
-}
-
-func defaultStatePath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("home: %w", err)
-	}
-	return home + "/.local/share/usp-ctxt/last_run.json", nil
 }

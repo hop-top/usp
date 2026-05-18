@@ -17,7 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"hop.top/kit/uxp"
+	"hop.top/kit/go/core/uxp"
+	kitcodex "hop.top/kit/go/core/uxp/invoke/adapters/codex"
 	"hop.top/usp/session"
 )
 
@@ -47,10 +48,18 @@ func (a *Adapter) ListSessions(cwd string) ([]session.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	if s, err := a.listFromIndex(root, cwd); err == nil {
-		return s, nil
+	indexed, indexErr := a.listFromIndex(root, cwd)
+	walked, walkErr := a.listFromWalk(root, cwd)
+	if walkErr != nil {
+		if indexErr == nil {
+			return indexed, nil
+		}
+		return nil, walkErr
 	}
-	return a.listFromWalk(root, cwd)
+	if indexErr != nil {
+		return walked, nil
+	}
+	return mergeSessions(indexed, walked), nil
 }
 
 func (a *Adapter) GetSession(id string) (*session.Session, error) {
@@ -62,11 +71,11 @@ func (a *Adapter) GetSession(id string) (*session.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	meta, n, err := readSessionFile(path)
+	meta, scan, err := readSessionFile(path)
 	if err != nil {
 		return nil, err
 	}
-	return metaToSession(meta, n), nil
+	return metaToSession(meta, scan), nil
 }
 
 func (a *Adapter) StreamTurns(id string) (<-chan session.Turn, error) {
@@ -153,8 +162,12 @@ func (a *Adapter) InjectSession(cwd string, turns []session.Turn) (string, error
 }
 
 // ResumeCmd returns the CLI command to resume the given session.
+// Delegates to kit's invocation facade so the argv stays in lockstep
+// with the cross-CLI matrix in go/core/uxp/README.md. Codex defaults
+// to interactive `codex resume <id>` when no output format is
+// requested, matching the typical human-in-the-loop resume flow.
 func (a *Adapter) ResumeCmd(nativeID string) []string {
-	return []string{"codex", "resume", nativeID}
+	return session.ResumeCmdFor(kitcodex.New(), nativeID)
 }
 
 // generateUUIDv7 produces a UUIDv7-style string from the given time
@@ -289,14 +302,14 @@ func (a *Adapter) listFromIndex(root, cwd string) ([]session.Session, error) {
 		if err != nil {
 			continue
 		}
-		meta, n, err := readSessionFile(path)
+		meta, scan, err := readSessionFile(path)
 		if err != nil {
 			continue
 		}
 		if cwd != "" && meta.Payload.CWD != cwd {
 			continue
 		}
-		s := metaToSession(meta, n)
+		s := metaToSession(meta, scan)
 		if entry.ThreadName != "" {
 			s.Metadata["thread_name"] = entry.ThreadName
 		}
@@ -311,20 +324,45 @@ func (a *Adapter) listFromWalk(root, cwd string) ([]session.Session, error) {
 		if err != nil || fi.IsDir() || !strings.HasSuffix(p, ".jsonl") {
 			return nil
 		}
-		meta, n, err := readSessionFile(p)
+		meta, scan, err := readSessionFile(p)
 		if err != nil {
 			return nil
 		}
 		if cwd != "" && meta.Payload.CWD != cwd {
 			return nil
 		}
-		out = append(out, *metaToSession(meta, n))
+		out = append(out, *metaToSession(meta, scan))
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("codex: walk: %w", err)
 	}
 	return out, nil
+}
+
+func mergeSessions(indexed, walked []session.Session) []session.Session {
+	out := make([]session.Session, 0, len(indexed)+len(walked))
+	seen := make(map[string]bool, len(indexed)+len(walked))
+	for _, s := range indexed {
+		key := s.NativeID
+		if key == "" {
+			key = s.ID
+		}
+		seen[key] = true
+		out = append(out, s)
+	}
+	for _, s := range walked {
+		key := s.NativeID
+		if key == "" {
+			key = s.ID
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, s)
+	}
+	return out
 }
 
 // --- file helpers ---
@@ -347,38 +385,68 @@ func findSessionFile(root, id string) (string, error) {
 	return found, nil
 }
 
-func readSessionFile(path string) (*sessionMeta, int, error) {
+// fileScan holds derived signals from a full pass over the JSONL.
+type fileScan struct {
+	lineCount int
+	model     string // last seen turn_context.payload.model
+}
+
+func readSessionFile(path string) (*sessionMeta, fileScan, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, 0, err
+		return nil, fileScan{}, err
 	}
 	defer f.Close()
 
 	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 	if !sc.Scan() {
-		return nil, 0, fmt.Errorf("codex: empty file %s", path)
+		return nil, fileScan{}, fmt.Errorf("codex: empty file %s", path)
 	}
 	var meta sessionMeta
 	if err := json.Unmarshal(sc.Bytes(), &meta); err != nil {
-		return nil, 0, fmt.Errorf("codex: parse meta %s: %w", path, err)
+		return nil, fileScan{}, fmt.Errorf("codex: parse meta %s: %w", path, err)
 	}
 	if meta.Type != "session_meta" {
-		return nil, 0, fmt.Errorf("codex: unexpected type %q in %s", meta.Type, path)
+		return nil, fileScan{}, fmt.Errorf("codex: unexpected type %q in %s", meta.Type, path)
 	}
-	lines := 1
+	scan := fileScan{lineCount: 1}
 	for sc.Scan() {
-		lines++
+		scan.lineCount++
+		// Look for turn_context events carrying model selection.
+		if m := extractTurnContextModel(sc.Bytes()); m != "" {
+			scan.model = m
+		}
 	}
-	return &meta, lines, nil
+	return &meta, scan, nil
 }
 
-func metaToSession(meta *sessionMeta, lineCount int) *session.Session {
+// extractTurnContextModel pulls payload.model from a turn_context line.
+// Returns empty string when the line is not a turn_context event.
+func extractTurnContextModel(line []byte) string {
+	var ev struct {
+		Type    string `json:"type"`
+		Payload struct {
+			Model string `json:"model"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(line, &ev); err != nil {
+		return ""
+	}
+	if ev.Type != "turn_context" {
+		return ""
+	}
+	return ev.Payload.Model
+}
+
+func metaToSession(meta *sessionMeta, scan fileScan) *session.Session {
 	s := &session.Session{
-		ID: meta.Payload.ID, CLI: uxp.CLICodex,
+		CLI:        uxp.CLICodex,
 		ProjectCwd: meta.Payload.CWD,
-		TurnCount:  lineCount - 1,
+		TurnCount:  scan.lineCount - 1,
 		Metadata:   make(map[string]any),
 	}
+	s.SetIDs(meta.Payload.ID)
 	if t, err := time.Parse(time.RFC3339Nano, meta.Payload.Timestamp); err == nil {
 		s.StartedAt = t
 	} else if t, err := time.Parse(time.RFC3339Nano, meta.Timestamp); err == nil {
@@ -392,6 +460,9 @@ func metaToSession(meta *sessionMeta, lineCount int) *session.Session {
 	}
 	if meta.Payload.CLIVersion != "" {
 		s.Metadata["cli_version"] = meta.Payload.CLIVersion
+	}
+	if scan.model != "" {
+		s.Metadata["assistant.model"] = scan.model
 	}
 	return s
 }
@@ -487,11 +558,11 @@ func (c *capMap) Coverage() map[string]uxp.Support {
 	return map[string]uxp.Support{
 		"session_store": uxp.Native, "session_resume": uxp.Native,
 		"tool_execution": uxp.Native, "model_selection": uxp.Native,
-		"sandbox_mode": uxp.Native,
+		"sandbox_mode":     uxp.Native,
 		"project_grouping": uxp.Workaround, "session_search": uxp.Workaround,
 		"prompt_history": uxp.Workaround, "thread_naming": uxp.Workaround,
 		"session_archival": uxp.Workaround,
-		"project_key": uxp.Missing, "session_branching": uxp.Missing,
+		"project_key":      uxp.Missing, "session_branching": uxp.Missing,
 		"session_export": uxp.Missing, "session_diff": uxp.Missing,
 		"multi_model": uxp.Missing, "cost_tracking": uxp.Missing,
 		"token_counting": uxp.Missing, "context_management": uxp.Missing,

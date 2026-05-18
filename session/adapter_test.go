@@ -3,7 +3,7 @@ package session
 import (
 	"testing"
 
-	"hop.top/kit/uxp"
+	"hop.top/kit/go/core/uxp"
 )
 
 // mockAdapter verifies the interface is satisfiable.

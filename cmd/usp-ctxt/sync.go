@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"time"
 
-	"hop.top/kit/uxp"
+	"hop.top/kit/go/core/uxp"
+	"hop.top/kit/go/core/xdg"
 	"hop.top/usp/adapters/claude"
 	"hop.top/usp/adapters/codex"
 	"hop.top/usp/adapters/gemini"
@@ -25,7 +24,7 @@ type syncParams struct {
 	ctxtServer  string
 	dryRun      bool
 	perTimeout  int
-	toolFilter  string
+	cliFilter   string
 	projectFlag string
 	verbose     bool
 }
@@ -38,7 +37,7 @@ func runSync(ctx context.Context, p syncParams, errw, outw io.Writer) error {
 		return err
 	}
 
-	src := newAdapterSource(p.toolFilter, p.projectFlag)
+	src := newAdapterSource(p.cliFilter, p.projectFlag)
 
 	var client uspctxt.CtxtClient = uspctxt.NewExecClient(p.ctxtServer)
 	if p.dryRun {
@@ -75,13 +74,14 @@ func runSync(ctx context.Context, p syncParams, errw, outw io.Writer) error {
 
 // adapterSource wraps the live usp adapter set as a SessionSource.
 type adapterSource struct {
-	clis     []string
-	adapters map[string]session.SessionAdapter
-	project  string
-	store    *lineage.Store
+	clis       []string
+	adapters   map[string]session.SessionAdapter
+	project    string
+	store      *lineage.Store
+	nativeByID map[string]string
 }
 
-func newAdapterSource(toolFilter, project string) *adapterSource {
+func newAdapterSource(cliFilter, project string) *adapterSource {
 	all := map[string]session.SessionAdapter{
 		uxp.CLIClaude:   claude.New(),
 		uxp.CLICodex:    &codex.Adapter{},
@@ -89,22 +89,26 @@ func newAdapterSource(toolFilter, project string) *adapterSource {
 		uxp.CLIGemini:   &gemini.Adapter{},
 	}
 	clis := []string{uxp.CLIClaude, uxp.CLICodex, uxp.CLIOpenCode, uxp.CLIGemini}
-	if toolFilter != "" {
-		if _, ok := all[toolFilter]; ok {
-			all = map[string]session.SessionAdapter{toolFilter: all[toolFilter]}
-			clis = []string{toolFilter}
+	if cliFilter != "" {
+		if _, ok := all[cliFilter]; ok {
+			all = map[string]session.SessionAdapter{cliFilter: all[cliFilter]}
+			clis = []string{cliFilter}
 		} else {
 			// unknown filter — empty source produces no work
 			all = map[string]session.SessionAdapter{}
 			clis = nil
 		}
 	}
-	src := &adapterSource{clis: clis, adapters: all, project: project}
+	src := &adapterSource{
+		clis:       clis,
+		adapters:   all,
+		project:    project,
+		nativeByID: map[string]string{},
+	}
 
 	// lineage store is best-effort; absence => no cross-CLI roots
-	home, err := os.UserHomeDir()
+	path, err := xdg.StateFile("usp", "sessions.db")
 	if err == nil {
-		path := filepath.Join(home, ".local", "state", "usp", "sessions.db")
 		if store, err := lineage.Open(path); err == nil {
 			src.store = store
 		}
@@ -126,6 +130,11 @@ func (s *adapterSource) ListSince(cli string, since time.Time) ([]session.Sessio
 	if err != nil {
 		return nil, err
 	}
+	for _, sess := range all {
+		if sess.NativeID != "" {
+			s.nativeByID[sess.ID] = sess.NativeID
+		}
+	}
 	if since.IsZero() {
 		return all, nil
 	}
@@ -144,7 +153,11 @@ func (s *adapterSource) Turns(cli, sessionID string) ([]session.Turn, error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown cli %q", cli)
 	}
-	ch, err := a.StreamTurns(sessionID)
+	nativeID := sessionID
+	if mapped := s.nativeByID[sessionID]; mapped != "" {
+		nativeID = mapped
+	}
+	ch, err := a.StreamTurns(nativeID)
 	if err != nil {
 		return nil, err
 	}

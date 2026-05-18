@@ -1,19 +1,14 @@
 // Package gemini implements session.SessionAdapter for Gemini CLI.
 //
 // Store layout:
-//   ~/.gemini/projects.json   — cwd → alias map
-//   ~/.gemini/history/<alias>/ — per-project history dir
 //
-// KNOWN LIMITATION (2026-04-11): history dirs contain only
-// .project_root markers; no chat transcript JSON files have been
-// observed on disk. The adapter handles this gracefully — ListSessions
-// returns empty when no chat files exist, and GetSession returns a
-// clear error when transcripts are absent.
+//	~/.gemini/projects.json   — cwd → alias map
+//	~/.gemini/tmp/<alias>/chats/session-*.jsonl — per-project chats
 package gemini
 
 import (
 	"crypto/rand"
-	"encoding/hex"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -21,14 +16,15 @@ import (
 	"strings"
 	"time"
 
-	"hop.top/kit/uxp"
+	"hop.top/kit/go/core/uxp"
+	kitgemini "hop.top/kit/go/core/uxp/invoke/adapters/gemini"
 	"hop.top/usp/session"
 )
 
 // projectsFile is the central cwd→alias map inside ~/.gemini/.
 const projectsFile = "projects.json"
 
-// projectRootMarker is the sentinel file inside each history dir.
+// projectRootMarker is the sentinel file inside each tmp project dir.
 const projectRootMarker = ".project_root"
 
 // projectsJSON mirrors the on-disk schema of ~/.gemini/projects.json.
@@ -74,22 +70,19 @@ func (a *Adapter) ProjectKey(cwd string) string {
 	return filepath.Base(cwd)
 }
 
-// ListSessions returns sessions found under the history dir for cwd.
-// Returns empty (not error) when the dir contains only .project_root
-// markers — this is the expected real-world case as of 2026-04-11.
+// ListSessions returns sessions found under Gemini's tmp chat dir for cwd.
 func (a *Adapter) ListSessions(cwd string) ([]session.Session, error) {
-	histRoot := filepath.Join(a.geminiRoot(), "history")
-
 	if cwd == "" {
-		return a.listAllAliases(histRoot)
+		return a.listAllProjectChats()
 	}
 
 	alias := a.ProjectKey(cwd)
-	return a.listAlias(histRoot, alias, cwd)
+	return a.listAliasChats(alias, cwd)
 }
 
-func (a *Adapter) listAllAliases(histRoot string) ([]session.Session, error) {
-	dirs, err := os.ReadDir(histRoot)
+func (a *Adapter) listAllProjectChats() ([]session.Session, error) {
+	tmpRoot := filepath.Join(a.geminiRoot(), "tmp")
+	dirs, err := os.ReadDir(tmpRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -101,213 +94,371 @@ func (a *Adapter) listAllAliases(histRoot string) ([]session.Session, error) {
 		if !d.IsDir() {
 			continue
 		}
-		sessions, _ := a.listAlias(histRoot, d.Name(), "")
+		cwd := a.projectRootForAlias(d.Name())
+		sessions, _ := a.listAliasChats(d.Name(), cwd)
 		all = append(all, sessions...)
 	}
 	return all, nil
 }
 
-func (a *Adapter) listAlias(histRoot, alias, cwd string) ([]session.Session, error) {
-	histDir := filepath.Join(histRoot, alias)
-	entries, err := os.ReadDir(histDir)
+func (a *Adapter) listAliasChats(alias, cwd string) ([]session.Session, error) {
+	chatDir := filepath.Join(a.geminiRoot(), "tmp", alias, "chats")
+	entries, err := os.ReadDir(chatDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("gemini: read history dir: %w", err)
+		return nil, fmt.Errorf("gemini: read chat dir: %w", err)
 	}
 
 	var sessions []session.Session
 	for _, e := range entries {
 		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".json") {
+		if e.IsDir() || !strings.HasSuffix(name, ".jsonl") {
 			continue
 		}
-		tag := strings.TrimSuffix(name, ".json")
 		info, _ := e.Info()
+		meta, err := readChatHeader(filepath.Join(chatDir, name))
+		if err != nil || meta.SessionID == "" {
+			continue
+		}
 		s := session.Session{
-			ID:         tag,
 			CLI:        uxp.CLIGemini,
 			ProjectCwd: cwd,
 			TurnCount:  0,
 		}
-		if info != nil {
+		s.SetIDs(meta.SessionID)
+		if t, err := time.Parse(time.RFC3339Nano, meta.StartTime); err == nil {
+			s.StartedAt = t
+		} else if info != nil {
 			s.StartedAt = info.ModTime()
+		}
+		if model := readModelFromTranscript(
+			filepath.Join(chatDir, name)); model != "" {
+			s.Metadata = map[string]any{"assistant.model": model}
 		}
 		sessions = append(sessions, s)
 	}
 	return sessions, nil
 }
 
-// GetSession returns a session by its tag ID. The tag corresponds to
-// a <tag>.json file inside the project's history dir.
-//
-// Returns an error when the transcript file does not exist — this is
-// the expected case as of 2026-04-11 since Gemini CLI does not appear
-// to write chat files to disk without explicit /chat save.
+// GetSession returns a session by its Gemini session UUID.
 func (a *Adapter) GetSession(id string) (*session.Session, error) {
-	// We need to scan projects.json to find which cwd owns this tag.
-	pm, err := a.loadProjects()
+	chatPath, cwd, err := a.findChatFile(id)
 	if err != nil {
-		return nil, fmt.Errorf("gemini: load projects: %w", err)
+		return nil, err
 	}
 
-	for cwd, alias := range pm.Projects {
-		p := filepath.Join(a.geminiRoot(), "history", alias, id+".json")
-		info, statErr := os.Stat(p)
-		if statErr != nil {
-			continue
-		}
-		s := &session.Session{
-			ID:         id,
-			CLI:        uxp.CLIGemini,
-			ProjectCwd: cwd,
-			StartedAt:  info.ModTime(),
-		}
-		return s, nil
+	info, _ := os.Stat(chatPath)
+	meta, _ := readChatHeader(chatPath)
+	s := &session.Session{
+		CLI:        uxp.CLIGemini,
+		ProjectCwd: cwd,
+		Metadata:   map[string]any{},
 	}
-
-	return nil, fmt.Errorf(
-		"gemini: session %q not found — transcript files may not "+
-			"exist on disk (known limitation)", id)
+	s.SetIDs(id)
+	if t, err := time.Parse(time.RFC3339Nano, meta.StartTime); err == nil {
+		s.StartedAt = t
+	} else if info != nil {
+		s.StartedAt = info.ModTime()
+	}
+	if model := readModelFromTranscript(chatPath); model != "" {
+		s.Metadata["assistant.model"] = model
+	}
+	if len(s.Metadata) == 0 {
+		s.Metadata = nil
+	}
+	return s, nil
 }
 
-// StreamTurns reads the chat JSON for the given session and emits one
-// Turn per message entry. Returns an error if the file is absent.
+// StreamTurns reads Gemini's JSONL chat for the given session and emits one
+// Turn per message entry.
 func (a *Adapter) StreamTurns(id string) (<-chan session.Turn, error) {
-	pm, err := a.loadProjects()
+	chatPath, _, err := a.findChatFile(id)
 	if err != nil {
-		return nil, fmt.Errorf("gemini: load projects: %w", err)
+		return nil, err
 	}
 
-	var chatPath string
-	for _, alias := range pm.Projects {
-		p := filepath.Join(a.geminiRoot(), "history", alias, id+".json")
-		if _, statErr := os.Stat(p); statErr == nil {
-			chatPath = p
-			break
-		}
-	}
-	if chatPath == "" {
-		return nil, fmt.Errorf(
-			"gemini: transcript %q not found on disk "+
-				"(known limitation: chat files require explicit /chat save)", id)
-	}
-
-	data, err := os.ReadFile(chatPath)
+	lines, err := readJSONLines(chatPath)
 	if err != nil {
 		return nil, fmt.Errorf("gemini: read transcript: %w", err)
 	}
 
-	var raw struct {
-		History []struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
-			Parts   []struct {
-				Text string `json:"text"`
-			} `json:"parts"`
-		} `json:"history"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf("gemini: parse transcript: %w", err)
+	turns := make([]session.Turn, 0, len(lines))
+	for _, line := range lines {
+		turn, ok := chatLineToTurn(line)
+		if ok {
+			turns = append(turns, turn)
+		}
 	}
 
-	ch := make(chan session.Turn, len(raw.History))
-	for _, msg := range raw.History {
-		content := msg.Content
-		if content == "" && len(msg.Parts) > 0 {
-			var texts []string
-			for _, p := range msg.Parts {
-				texts = append(texts, p.Text)
-			}
-			content = strings.Join(texts, "\n")
-		}
-		ch <- session.Turn{
-			Role:      mapRole(msg.Role),
-			Content:   content,
-			Timestamp: time.Time{}, // Gemini transcripts lack per-message timestamps.
-		}
+	ch := make(chan session.Turn, len(turns))
+	for _, turn := range turns {
+		ch <- turn
 	}
 	close(ch)
 	return ch, nil
 }
 
-// geminiPart mirrors the Gemini chat JSON part structure.
-type geminiPart struct {
+type chatHeader struct {
+	SessionID   string `json:"sessionId"`
+	ProjectHash string `json:"projectHash"`
+	StartTime   string `json:"startTime"`
+	LastUpdated string `json:"lastUpdated"`
+	Kind        string `json:"kind"`
+}
+
+type chatContentPart struct {
 	Text string `json:"text"`
 }
 
-// geminiMsg mirrors a single Gemini chat history message.
-type geminiMsg struct {
-	Role  string       `json:"role"`
-	Parts []geminiPart `json:"parts"`
-}
-
-// geminiChat is the top-level Gemini chat JSON structure.
-type geminiChat struct {
-	History []geminiMsg `json:"history"`
-}
-
-// InjectSession writes turns into Gemini's native history dir as a
-// new chat JSON file, enabling cross-CLI resume via `gemini chat
-// resume <tag>`.
-//
-// CAVEAT (2026-04-11): Gemini CLI has no observed chat files on disk.
-// Whether it actually reads injected files on resume is unverified.
+// InjectSession writes turns into Gemini's native JSONL chat store,
+// creating a UUID-backed session that can be resumed via `gemini --resume
+// <uuid>`.
 func (a *Adapter) InjectSession(cwd string, turns []session.Turn) (string, error) {
 	alias := a.ProjectKey(cwd)
-	histDir := filepath.Join(a.geminiRoot(), "history", alias)
-	if err := os.MkdirAll(histDir, 0o755); err != nil {
-		return "", fmt.Errorf("gemini: create history dir: %w", err)
+	projectDir := filepath.Join(a.geminiRoot(), "tmp", alias)
+	chatDir := filepath.Join(projectDir, "chats")
+	if err := os.MkdirAll(chatDir, 0o755); err != nil {
+		return "", fmt.Errorf("gemini: create chat dir: %w", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(projectDir, projectRootMarker), []byte(cwd), 0o644,
+	); err != nil {
+		return "", fmt.Errorf("gemini: write project root marker: %w", err)
 	}
 
-	var msgs []geminiMsg
-	for _, t := range turns {
-		role, text := "user", t.Content
-		switch t.Role {
-		case session.RoleAssistant:
-			role = "model"
-		case session.RoleSystem:
-			text = "[System] " + text
-		}
-		// Append tool call summaries.
-		for _, tc := range t.ToolCalls {
-			text += fmt.Sprintf("\n[Tool: %s → %s]", tc.Name, tc.Output)
-		}
-		msgs = append(msgs, geminiMsg{
-			Role:  role,
-			Parts: []geminiPart{{Text: text}},
-		})
-	}
-
-	tag, err := generateTag()
+	sessionID, err := generateUUID()
 	if err != nil {
 		return "", err
 	}
+	now := time.Now().UTC()
+	nowStr := now.Format(time.RFC3339Nano)
 
-	data, err := json.MarshalIndent(geminiChat{History: msgs}, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("gemini: marshal chat: %w", err)
+	var lines []any
+	lines = append(lines, chatHeader{
+		SessionID:   sessionID,
+		ProjectHash: projectHash(cwd),
+		StartTime:   nowStr,
+		LastUpdated: nowStr,
+		Kind:        "main",
+	})
+	lastUpdated := nowStr
+	for _, turn := range turns {
+		ts := turn.Timestamp.UTC()
+		if ts.IsZero() {
+			ts = now
+		}
+		lastUpdated = ts.Format(time.RFC3339Nano)
+		lines = append(lines, turnToChatLine(turn, lastUpdated))
+		lines = append(lines, map[string]any{
+			"$set": map[string]any{"lastUpdated": lastUpdated},
+		})
 	}
-	p := filepath.Join(histDir, tag+".json")
-	if err := os.WriteFile(p, data, 0o644); err != nil {
+
+	p := filepath.Join(chatDir, fmt.Sprintf(
+		"session-%s-%s.jsonl",
+		now.Format("2006-01-02T15-04"), sessionID[:8],
+	))
+	if err := writeJSONLines(p, lines); err != nil {
 		return "", fmt.Errorf("gemini: write chat file: %w", err)
 	}
-	return tag, nil
+	return sessionID, nil
 }
 
 // ResumeCmd returns the CLI command to resume an injected session.
+// Delegates to kit's invocation facade so the argv stays in lockstep
+// with the cross-CLI matrix in go/core/uxp/README.md.
 func (a *Adapter) ResumeCmd(nativeID string) []string {
-	return []string{"gemini", "chat", "resume", nativeID}
+	return session.ResumeCmdFor(kitgemini.New(), nativeID)
 }
 
-// generateTag returns a "usp-resume-<8hex>" tag.
-func generateTag() (string, error) {
-	b := make([]byte, 4)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("gemini: generate tag: %w", err)
+func (a *Adapter) findChatFile(id string) (string, string, error) {
+	tmpRoot := filepath.Join(a.geminiRoot(), "tmp")
+	dirs, err := os.ReadDir(tmpRoot)
+	if err != nil {
+		return "", "", fmt.Errorf("gemini: read tmp dir: %w", err)
 	}
-	return "usp-resume-" + hex.EncodeToString(b), nil
+	for _, d := range dirs {
+		if !d.IsDir() {
+			continue
+		}
+		chatDir := filepath.Join(tmpRoot, d.Name(), "chats")
+		entries, err := os.ReadDir(chatDir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
+				continue
+			}
+			p := filepath.Join(chatDir, e.Name())
+			meta, err := readChatHeader(p)
+			if err == nil && sessionIDMatches(meta.SessionID, id) {
+				return p, a.projectRootForAlias(d.Name()), nil
+			}
+		}
+	}
+	return "", "", fmt.Errorf("gemini: session %q not found", id)
+}
+
+func (a *Adapter) projectRootForAlias(alias string) string {
+	p := filepath.Join(a.geminiRoot(), "tmp", alias, projectRootMarker)
+	data, err := os.ReadFile(p)
+	if err == nil {
+		return strings.TrimSpace(string(data))
+	}
+	pm, err := a.loadProjects()
+	if err != nil {
+		return ""
+	}
+	for cwd, mapped := range pm.Projects {
+		if mapped == alias {
+			return cwd
+		}
+	}
+	return ""
+}
+
+func sessionIDMatches(sessionID, input string) bool {
+	return sessionID == input || strings.HasPrefix(sessionID, input)
+}
+
+func readChatHeader(path string) (chatHeader, error) {
+	lines, err := readJSONLines(path)
+	if err != nil {
+		return chatHeader{}, err
+	}
+	if len(lines) == 0 {
+		return chatHeader{}, fmt.Errorf("empty chat file")
+	}
+	var h chatHeader
+	if err := json.Unmarshal(lines[0], &h); err != nil {
+		return chatHeader{}, err
+	}
+	return h, nil
+}
+
+func readJSONLines(path string) ([]json.RawMessage, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var lines []json.RawMessage
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		lines = append(lines, json.RawMessage(line))
+	}
+	return lines, nil
+}
+
+func writeJSONLines(path string, lines []any) error {
+	var b strings.Builder
+	enc := json.NewEncoder(&b)
+	for _, line := range lines {
+		if err := enc.Encode(line); err != nil {
+			return err
+		}
+	}
+	return os.WriteFile(path, []byte(b.String()), 0o644)
+}
+
+func chatLineToTurn(line json.RawMessage) (session.Turn, bool) {
+	var raw struct {
+		Type      string             `json:"type"`
+		Timestamp string             `json:"timestamp"`
+		Content   json.RawMessage    `json:"content"`
+		ToolCalls []session.ToolCall `json:"toolCalls"`
+	}
+	if err := json.Unmarshal(line, &raw); err != nil {
+		return session.Turn{}, false
+	}
+	switch raw.Type {
+	case "user", "gemini", "model", "assistant", "system":
+	default:
+		return session.Turn{}, false
+	}
+	ts, _ := time.Parse(time.RFC3339Nano, raw.Timestamp)
+	return session.Turn{
+		Role:      mapRole(raw.Type),
+		Content:   parseChatContent(raw.Content),
+		ToolCalls: raw.ToolCalls,
+		Timestamp: ts,
+	}, true
+}
+
+func parseChatContent(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s
+	}
+	var parts []chatContentPart
+	if err := json.Unmarshal(raw, &parts); err == nil {
+		var out []string
+		for _, p := range parts {
+			out = append(out, p.Text)
+		}
+		return strings.Join(out, "\n")
+	}
+	return ""
+}
+
+func turnToChatLine(turn session.Turn, timestamp string) map[string]any {
+	text := turn.Content
+	for _, tc := range turn.ToolCalls {
+		text += fmt.Sprintf("\n[Tool: %s → %s]", tc.Name, tc.Output)
+	}
+	switch turn.Role {
+	case session.RoleAssistant:
+		return map[string]any{
+			"id":        mustGenerateUUID(),
+			"timestamp": timestamp,
+			"type":      "gemini",
+			"content":   text,
+			"thoughts":  []any{},
+			"toolCalls": []any{},
+		}
+	case session.RoleSystem:
+		text = "[System] " + text
+	}
+	return map[string]any{
+		"id":        mustGenerateUUID(),
+		"timestamp": timestamp,
+		"type":      "user",
+		"content":   []chatContentPart{{Text: text}},
+	}
+}
+
+func projectHash(cwd string) string {
+	sum := sha256.Sum256([]byte(cwd))
+	return fmt.Sprintf("%x", sum[:])
+}
+
+func mustGenerateUUID() string {
+	id, err := generateUUID()
+	if err != nil {
+		return fmt.Sprintf("usp-%d", time.Now().UnixNano())
+	}
+	return id
+}
+
+func generateUUID() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", fmt.Errorf("gemini: generate uuid: %w", err)
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf(
+		"%08x-%04x-%04x-%04x-%012x",
+		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16],
+	), nil
 }
 
 // geminiRoot returns the resolved ~/.gemini path.
@@ -335,6 +486,27 @@ func (a *Adapter) loadProjects() (*projectsJSON, error) {
 	return &pm, nil
 }
 
+// readModelFromTranscript best-effort pulls `assistant.model` from a
+// Gemini chat JSONL file. Returns "" when no
+// model field is present (Gemini schema is loose; future versions may
+// add it). Errors are silent — telemetry is opportunistic.
+func readModelFromTranscript(path string) string {
+	lines, err := readJSONLines(path)
+	if err != nil {
+		return ""
+	}
+	var last string
+	for _, line := range lines {
+		var raw struct {
+			Model string `json:"model"`
+		}
+		if err := json.Unmarshal(line, &raw); err == nil && raw.Model != "" {
+			last = raw.Model
+		}
+	}
+	return last
+}
+
 // mapRole translates Gemini role strings to USP roles.
 func mapRole(r string) session.Role {
 	switch r {
@@ -359,10 +531,11 @@ func (c *capMap) Supports(dim string) bool {
 
 func (c *capMap) Coverage() map[string]uxp.Support {
 	return map[string]uxp.Support{
-		// Native (9)
+		// Native (10)
 		"per-project-sessions":  uxp.Native,
 		"session-alias":         uxp.Native,
 		"session-resume":        uxp.Native,
+		"resume-by-uuid":        uxp.Native,
 		"named-save":            uxp.Native,
 		"project-map":           uxp.Native,
 		"worktree-isolation":    uxp.Native,
@@ -374,13 +547,12 @@ func (c *capMap) Coverage() map[string]uxp.Support {
 		"cross-project-list":  uxp.Workaround,
 		"project-root-marker": uxp.Workaround,
 		"auto-recent-resume":  uxp.Workaround,
-		// Missing (7)
-		"append-stream":       uxp.Missing,
-		"memory-subsystem":    uxp.Missing,
-		"cross-project-search": uxp.Missing,
-		"resume-by-uuid":      uxp.Missing,
+		// Missing (6)
+		"append-stream":         uxp.Missing,
+		"memory-subsystem":      uxp.Missing,
+		"cross-project-search":  uxp.Missing,
 		"per-message-timestamp": uxp.Missing,
-		"tool-call-capture":   uxp.Missing,
-		"event-log":           uxp.Missing,
+		"tool-call-capture":     uxp.Missing,
+		"event-log":             uxp.Missing,
 	}
 }

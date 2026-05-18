@@ -26,7 +26,7 @@ e2e/cassettes/
   latest/                # all 4 CLIs at latest version
     single_session/      # one CLI, one session lifecycle
     cross_resume/        # resume across CLIs
-    filter_test/         # --since/--tool/--project filters
+    filter_test/         # --since/--cli/--project filters
   mixed/                 # mixed CLI versions
     ...
   oldest/                # all 4 CLIs at oldest supported

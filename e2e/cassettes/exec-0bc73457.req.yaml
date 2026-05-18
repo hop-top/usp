@@ -1,0 +1,9 @@
+xrr: "1"
+adapter: exec
+fingerprint: 0bc73457
+recorded_at: "2026-05-17T16:46:40Z"
+payload:
+    argv:
+        - opencode
+        - -p
+        - list files in /tmp

@@ -1,0 +1,9 @@
+xrr: "1"
+adapter: exec
+fingerprint: 1845be24
+recorded_at: "2026-05-17T16:46:39Z"
+payload:
+    argv:
+        - gemini
+        - -p
+        - list files in /tmp

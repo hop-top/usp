@@ -29,3 +29,5 @@ without parsing the CLI's native transcript format.
 
 - Foundation for US-0001 (search → show) and US-0002 (archive).
 - Existing command — story documents the typical-use contract.
+
+Covered by: `e2e/session_show_test.go`

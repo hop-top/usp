@@ -1,0 +1,13 @@
+xrr: "1"
+adapter: exec
+fingerprint: a6fbf1bd
+recorded_at: "2026-05-17T16:47:06Z"
+payload:
+    argv:
+        - usp
+        - session
+        - list
+        - --format
+        - json
+        - --project
+        - /tmp/usp-e2e-project-a

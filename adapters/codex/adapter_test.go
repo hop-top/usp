@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"hop.top/kit/uxp"
+	"hop.top/kit/go/core/uxp"
 	"hop.top/usp/session"
 )
 
@@ -140,8 +140,8 @@ func TestListSessionsWalk(t *testing.T) {
 	if s.TurnCount != 2 {
 		t.Errorf("turn_count = %d, want 2", s.TurnCount)
 	}
-	if s.ID != "019cb730-aaaa-7000-bbbb-ccccddddeeee" {
-		t.Errorf("id = %q, want uuid", s.ID)
+	if s.NativeID != "019cb730-aaaa-7000-bbbb-ccccddddeeee" {
+		t.Errorf("native_id = %q, want uuid", s.NativeID)
 	}
 }
 
@@ -202,6 +202,82 @@ func TestListSessionsFallback(t *testing.T) {
 	}
 	if len(sessions) != 1 {
 		t.Fatalf("expected 1 session via fallback, got %d", len(sessions))
+	}
+}
+
+func TestListSessionsFallbackWhenIndexHasNoMatchingFiles(t *testing.T) {
+	cwd := "/Users/test/myproject"
+	root := setupSessionTree(t, cwd)
+	codexDir := filepath.Dir(root)
+	indexPath := filepath.Join(codexDir, "session_index.jsonl")
+	writeJSONL(t, indexPath,
+		indexEntry{ID: "missing-session-id", ThreadName: "Stale", UpdatedAt: "2026-04-09T18:00:00Z"},
+	)
+
+	a := &Adapter{}
+
+	origSR := sessionsRootFn
+	sessionsRootFn = func() (string, error) { return root, nil }
+	defer func() { sessionsRootFn = origSR }()
+
+	origCR := codexRootFn
+	codexRootFn = func() (string, error) { return codexDir, nil }
+	defer func() { codexRootFn = origCR }()
+
+	sessions, err := a.ListSessions(cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session via stale-index fallback, got %d", len(sessions))
+	}
+	if sessions[0].NativeID != "019cb730-aaaa-7000-bbbb-ccccddddeeee" {
+		t.Fatalf("native_id = %q, want fallback walk session", sessions[0].NativeID)
+	}
+}
+
+func TestListSessionsMergesPartialIndexWithWalk(t *testing.T) {
+	cwd := "/Users/test/myproject"
+	root := setupSessionTree(t, cwd)
+	codexDir := filepath.Dir(root)
+	indexPath := filepath.Join(codexDir, "session_index.jsonl")
+	writeJSONL(t, indexPath,
+		indexEntry{
+			ID:         "019cb730-aaaa-7000-bbbb-ccccddddeeee",
+			ThreadName: "Indexed",
+			UpdatedAt:  "2026-04-09T18:00:00Z",
+		},
+	)
+
+	a := &Adapter{}
+
+	origSR := sessionsRootFn
+	sessionsRootFn = func() (string, error) { return root, nil }
+	defer func() { sessionsRootFn = origSR }()
+
+	origCR := codexRootFn
+	codexRootFn = func() (string, error) { return codexDir, nil }
+	defer func() { codexRootFn = origCR }()
+
+	sessions, err := a.ListSessions("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 2 {
+		t.Fatalf("expected 2 merged sessions, got %d", len(sessions))
+	}
+
+	var indexed, walked bool
+	for _, s := range sessions {
+		switch s.NativeID {
+		case "019cb730-aaaa-7000-bbbb-ccccddddeeee":
+			indexed = s.Metadata["thread_name"] == "Indexed"
+		case "019cb730-ffff-7000-aaaa-111122223333":
+			walked = true
+		}
+	}
+	if !indexed || !walked {
+		t.Fatalf("expected indexed and walked sessions, got %#v", sessions)
 	}
 }
 
@@ -423,5 +499,64 @@ func TestParseTimestamp(t *testing.T) {
 	}
 	if parsed.Year() != 2026 || parsed.Month() != 4 {
 		t.Errorf("parsed = %v, unexpected", parsed)
+	}
+}
+
+func TestAssistantModelFromTurnContext(t *testing.T) {
+	tmp := t.TempDir()
+	root := filepath.Join(tmp, ".codex", "sessions")
+	dayDir := filepath.Join(root, "2026", "02", "13")
+	if err := os.MkdirAll(dayDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	id := "019c557f-437c-7aa2-b991-25a7fbe6355e"
+	fname := "rollout-2026-02-13T05-35-29-" + id + ".jsonl"
+	turnContext := map[string]any{
+		"timestamp": "2026-02-13T05:35:31.956Z",
+		"type":      "turn_context",
+		"payload": map[string]any{
+			"cwd":   "/proj",
+			"model": "gpt-5.3-codex",
+		},
+	}
+	writeJSONL(t, filepath.Join(dayDir, fname),
+		makeMeta(id, "/proj"),
+		turnContext,
+		makeResponseItem("user", "hi"),
+		makeResponseItem("assistant", "hello"),
+	)
+
+	restore := SetSessionsRoot(root)
+	defer restore()
+
+	a := &Adapter{}
+	s, err := a.GetSession(id)
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if got := s.Metadata["assistant.model"]; got != "gpt-5.3-codex" {
+		t.Errorf("assistant.model = %v, want gpt-5.3-codex", got)
+	}
+	if got := s.Metadata["cli_version"]; got != "0.119.0-alpha.11" {
+		t.Errorf("cli_version = %v, want 0.119.0-alpha.11", got)
+	}
+}
+
+func TestAssistantModelAbsentWhenNoTurnContext(t *testing.T) {
+	cwd := "/Users/test/myproject"
+	root := setupSessionTree(t, cwd) // no turn_context events
+
+	restore := SetSessionsRoot(root)
+	defer restore()
+
+	a := &Adapter{}
+	s, err := a.GetSession("019cb730-aaaa-7000-bbbb-ccccddddeeee")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.Metadata["assistant.model"]; ok {
+		t.Errorf("assistant.model should be absent, got %v",
+			s.Metadata["assistant.model"])
 	}
 }

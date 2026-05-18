@@ -32,3 +32,8 @@ grepping multiple JSONL trees with per-tool jq.
 - Search scope: full content across system / user / assistant
   / tool-call turns.
 - Existing command — story documents the typical-use contract.
+- Post adapter-signal-extraction (T-0078..T-0083): once
+  sessions are projected into ctxt, equivalent searches
+  surface as `ctxt find "@file.<slug>"`, `ctxt find
+  "@model.<slug>"`, `ctxt find "#cost:high"`, broadening the
+  recall surface beyond raw text. See README "Signals".

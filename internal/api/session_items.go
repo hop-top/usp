@@ -59,7 +59,19 @@ func (s *Service) FindSessionItems(
 	sessions := s.collectSessions(ctx, adapters, req.CLI, req.Project)
 	sessions = sessionutil.FilterSince(sessions, req.Since)
 
-	items := make([]SessionListItem, 0, len(sessions))
+	// Sort upfront so we can stop streaming turns once req.Limit matches
+	// have been collected. Output stays identical to the prior
+	// scan-everything-then-sort approach: stable sort preserves tie order,
+	// and matched sessions are appended in already-sorted order.
+	sort.SliceStable(sessions, func(i, j int) bool {
+		return sessions[i].StartedAt.After(sessions[j].StartedAt)
+	})
+
+	capacity := len(sessions)
+	if req.Limit > 0 && req.Limit < capacity {
+		capacity = req.Limit
+	}
+	items := make([]SessionListItem, 0, capacity)
 	for _, sess := range sessions {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -87,12 +99,9 @@ func (s *Service) FindSessionItems(
 			Session: sess,
 			Actions: SummarizeTurns(turns),
 		})
-	}
-	sort.SliceStable(items, func(i, j int) bool {
-		return items[i].Session.StartedAt.After(items[j].Session.StartedAt)
-	})
-	if req.Limit > 0 && len(items) > req.Limit {
-		items = items[:req.Limit]
+		if req.Limit > 0 && len(items) >= req.Limit {
+			break
+		}
 	}
 	return items, nil
 }

@@ -30,6 +30,7 @@ func TestSessionSubtreeAnnotations(t *testing.T) {
 		"lineage": {sideEffect: cli.SideEffectRead, idempotency: cli.IdempotencyYes, requireLong: true},
 		"skills":  {sideEffect: cli.SideEffectRead, idempotency: cli.IdempotencyYes, requireLong: true},
 		"tools":   {sideEffect: cli.SideEffectRead, idempotency: cli.IdempotencyYes, requireLong: true},
+		"resume":  {sideEffect: cli.SideEffectInteractive, idempotency: cli.IdempotencyNo, requireLong: true},
 	}
 
 	seen := map[string]bool{}
@@ -37,6 +38,7 @@ func TestSessionSubtreeAnnotations(t *testing.T) {
 		name := sub.Name()
 		w, ok := wants[name]
 		if !ok {
+			t.Errorf("session subtree: unexpected leaf %q has no conformance assertions — add it to wants", name)
 			continue
 		}
 		seen[name] = true

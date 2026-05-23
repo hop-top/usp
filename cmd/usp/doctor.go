@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"hop.top/kit/go/console/cli"
 	"hop.top/kit/go/console/output"
 	"hop.top/kit/go/core/uxp"
 )
@@ -33,6 +34,17 @@ func doctorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "doctor",
 		Short: "Check environment health for supported CLIs",
+		Long: `Run a battery of read-only health checks against every
+configured CLI adapter (e.g. claude, codex, gemini) and the usp
+project index DB.
+
+For each adapter doctor verifies that the binary is installed and
+that its session store directory exists and is readable; it then
+verifies the usp index DB is present and accessible. Results render
+as a table by default (--format=json|yaml supported) with a
+non-zero exit code when any check fails.
+
+Use --cli=<name> to scope the run to a single adapter.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			reg := uxp.DefaultRegistry()
 			doc := uxp.NewDoctor()
@@ -69,6 +81,9 @@ func doctorCmd() *cobra.Command {
 	}
 
 	addCLIFlag(cmd, &cliFlag, "Check a single CLI (e.g. claude, codex)")
+	cli.SetSideEffect(cmd, cli.SideEffectRead)
+	cli.SetIdempotency(cmd, cli.IdempotencyYes)
+	cli.SetTopLevelVerb(cmd)
 	return cmd
 }
 

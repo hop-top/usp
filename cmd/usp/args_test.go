@@ -177,6 +177,36 @@ func TestArgsSessionSearchRequiresOneArg(t *testing.T) {
 	}
 }
 
+func TestArgsSessionResumeFlags(t *testing.T) {
+	cmd := sessionResumeCmd()
+	stubRunE(cmd)
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+
+	for _, name := range []string{"cli", "filter"} {
+		if cmd.Flags().Lookup(name) == nil {
+			t.Errorf("missing flag %q", name)
+		}
+	}
+	if cmd.Flags().Lookup("tool") != nil {
+		t.Error("--tool flag should not be registered")
+	}
+
+	cmd.SetArgs([]string{"--help"})
+	if err := cmd.Execute(); err != nil {
+		t.Errorf("--help errored: %v", err)
+	}
+
+	cmd = sessionResumeCmd()
+	stubRunE(cmd)
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+	cmd.SetArgs([]string{"sess_abc"})
+	if err := cmd.Execute(); err == nil {
+		t.Error("expected positional args to be rejected")
+	}
+}
+
 func TestArgsSessionSkillsFlags(t *testing.T) {
 	cmd := sessionSkillsCmd()
 	stubRunE(cmd)
@@ -253,7 +283,7 @@ func TestArgsCommandWiring(t *testing.T) {
 			for _, sub := range c.Commands() {
 				sesNames[sub.Name()] = true
 			}
-			for _, want := range []string{"list", "show", "search", "lineage", "skills", "tools"} {
+			for _, want := range []string{"list", "resume", "show", "search", "lineage", "skills", "tools"} {
 				if !sesNames[want] {
 					t.Errorf("session missing subcommand %q", want)
 				}

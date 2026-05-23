@@ -4,7 +4,27 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"hop.top/kit/go/console/cli"
 )
+
+// TestVersionCmd_Annotations pins kit conformance annotations on
+// the depth-1 version leaf.
+func TestVersionCmd_Annotations(t *testing.T) {
+	cmd := versionCmd()
+	if se, ok := cli.GetSideEffect(cmd); !ok || se != cli.SideEffectRead {
+		t.Errorf("version side-effect = (%q,%v), want (read,true)", se, ok)
+	}
+	if id, ok := cli.GetIdempotency(cmd); !ok || id != cli.IdempotencyYes {
+		t.Errorf("version idempotency = (%q,%v), want (yes,true)", id, ok)
+	}
+	if !cli.IsTopLevelVerb(cmd) {
+		t.Error("version missing kit/top-level-verb annotation")
+	}
+	if cmd.Long == "" {
+		t.Error("version missing Long help")
+	}
+}
 
 func TestVersionCmd_Output(t *testing.T) {
 	cmd := versionCmd()

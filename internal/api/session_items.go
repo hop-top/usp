@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"hop.top/usp/internal/sessionutil"
 	"hop.top/usp/session"
 )
 
@@ -31,6 +32,76 @@ func (s *Service) ListSessionItems(
 			Session: sess,
 			Actions: s.sessionActions(ctx, sess),
 		})
+	}
+	return items, nil
+}
+
+type FindSessionItemsRequest struct {
+	Project string
+	CLI     string
+	Filter  string
+	Since   time.Time
+	Limit   int
+}
+
+func (s *Service) FindSessionItems(
+	ctx context.Context,
+	req FindSessionItemsRequest,
+) ([]SessionListItem, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	adapters, err := s.filteredAdapters(req.CLI)
+	if err != nil {
+		return nil, err
+	}
+	matcher := newContentMatcher(req.Filter)
+	sessions := s.collectSessions(ctx, adapters, req.CLI, req.Project)
+	sessions = sessionutil.FilterSince(sessions, req.Since)
+
+	// Sort upfront so we can stop streaming turns once req.Limit matches
+	// have been collected. Output stays identical to the prior
+	// scan-everything-then-sort approach: stable sort preserves tie order,
+	// and matched sessions are appended in already-sorted order.
+	sort.SliceStable(sessions, func(i, j int) bool {
+		return sessions[i].StartedAt.After(sessions[j].StartedAt)
+	})
+
+	capacity := len(sessions)
+	if req.Limit > 0 && req.Limit < capacity {
+		capacity = req.Limit
+	}
+	items := make([]SessionListItem, 0, capacity)
+	for _, sess := range sessions {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		a, ok := adapters[string(sess.CLI)]
+		if !ok {
+			continue
+		}
+		ch, err := a.StreamTurns(sess.NativeID)
+		if err != nil {
+			continue
+		}
+		var turns []session.Turn
+		matched := false
+		for turn := range ch {
+			turns = append(turns, turn)
+			if matcher.MatchTurn(turn) {
+				matched = true
+			}
+		}
+		if !matched {
+			continue
+		}
+		items = append(items, SessionListItem{
+			Session: sess,
+			Actions: SummarizeTurns(turns),
+		})
+		if req.Limit > 0 && len(items) >= req.Limit {
+			break
+		}
 	}
 	return items, nil
 }
@@ -67,6 +138,58 @@ func (s *Service) sessionActions(ctx context.Context, sess session.Session) stri
 	actions := SummarizeTurns(turns)
 	s.cachePut(ctx, "session-actions", req, actions)
 	return actions
+}
+
+type contentMatcher struct {
+	raw     string
+	value   string
+	compact string
+}
+
+func newContentMatcher(filter string) contentMatcher {
+	raw := strings.ToLower(strings.TrimSpace(filter))
+	value := raw
+	if before, after, ok := strings.Cut(raw, ":"); ok && before == "commit" {
+		value = strings.TrimSpace(after)
+	}
+	return contentMatcher{
+		raw:     raw,
+		value:   value,
+		compact: compactSearchText(value),
+	}
+}
+
+func (m contentMatcher) MatchTurn(turn session.Turn) bool {
+	if m.raw == "" {
+		return true
+	}
+	var b strings.Builder
+	b.Grow(len(turn.Content) + 32*len(turn.ToolCalls))
+	b.WriteString(turn.Content)
+	for _, call := range turn.ToolCalls {
+		b.WriteByte(' ')
+		b.WriteString(call.Name)
+		b.WriteByte(' ')
+		b.WriteString(call.Input)
+		b.WriteByte(' ')
+		b.WriteString(call.Output)
+	}
+	text := b.String()
+	lower := strings.ToLower(text)
+	if strings.Contains(lower, m.raw) || strings.Contains(lower, m.value) {
+		return true
+	}
+	return m.compact != "" && strings.Contains(compactSearchText(text), m.compact)
+}
+
+func compactSearchText(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 func SummarizeTurns(turns []session.Turn) string {

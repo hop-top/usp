@@ -71,7 +71,7 @@ usp [command] [--flags]
 | ORGANIZE | [`doctor`](#usp-doctor) | Health-check the environment for supported CLIs. |
 | ORGANIZE | [`setup`](#usp-setup) | Detect CLIs and (re)build the index. |
 | MANAGEMENT | [`alias`](#usp-alias) | Manage user-defined command aliases (hidden from default help; see `--help-all`). |
-| MANAGEMENT | `config` / `version` / `upgrade` | Standard kit-managed surface (`--help-all`). |
+| MANAGEMENT | `config` / `version` / `upgrade` / `status` | Standard kit-managed surface (`--help-all`). `status` reports profile, env, workspace, auth, effective-config, and kit annotations; see [`docs/migration/kit-12fcc-confirm.md`](../migration/kit-12fcc-confirm.md). |
 
 **Examples**
 
@@ -211,9 +211,50 @@ usp session [command] [--flags]
 | Command | Purpose |
 |---|---|
 | [`list`](#usp-session-list) | List sessions across all CLIs. |
+| [`resume`](#usp-session-resume) | Resume this project's latest or matched session. |
 | [`search`](#usp-session-search) | Search session content. |
 | [`show`](#usp-session-show) | Display metadata + turn summary. |
+| [`skills`](#usp-session-skills) | List skill invocations. |
+| [`tools`](#usp-session-tools) | List tool calls. |
 | [`lineage`](#usp-session-lineage) | Show cross-CLI continuation chain. |
+
+---
+
+## `usp session resume`
+
+**Purpose** — Resume a project-local source session in another CLI.
+Without a filter, the source is the most recently closed session in
+the current project. If no adapter reports closed timestamps, usp falls
+back to the most recent project session.
+
+**Synopsis**
+
+```sh
+usp session resume --cli <cli> [--filter <ref>]
+```
+
+**Args** — none.
+
+**Flags**
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--cli <cli>` | _required_ | Target CLI to resume in (`claude`, `codex`, `gemini`, `opencode`). |
+| `--filter <ref>` | latest closed | Search project sessions for a content reference before resuming. Supports references such as `issue#31`, `pr#2`, `mr#32`, and `commit:<sha>`. |
+
+**Examples**
+
+```sh
+usp session resume --cli codex
+usp session resume --cli gemini --filter issue#31
+usp session resume --cli claude --filter commit:abc123def456
+```
+
+When `--filter` matches more than one session, usp opens a select list
+on a TTY. In non-interactive use, multiple matches return an error.
+
+**Cross-refs** — [`usp resume`](#usp-resume) (explicit source ID),
+[`usp session list`](#usp-session-list) (inspect candidates).
 
 ---
 

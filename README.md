@@ -146,6 +146,7 @@ usp session show <id> --skills  # detail + skill invocations
 usp session search auth  # find sessions mentioning "auth"
 usp session skills --name review  # every session that fired the review skill
 usp session tools --category edit # tool calls grouped by universal taxonomy
+usp session resume --cli codex    # resume latest project session
 
 usp resume --cli codex        # resume last session in Codex
 usp session lineage <id>      # cross-CLI conversation history

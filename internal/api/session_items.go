@@ -154,10 +154,18 @@ func (m contentMatcher) MatchTurn(turn session.Turn) bool {
 	if m.raw == "" {
 		return true
 	}
-	text := turn.Content
+	var b strings.Builder
+	b.Grow(len(turn.Content) + 32*len(turn.ToolCalls))
+	b.WriteString(turn.Content)
 	for _, call := range turn.ToolCalls {
-		text += " " + call.Name + " " + call.Input + " " + call.Output
+		b.WriteByte(' ')
+		b.WriteString(call.Name)
+		b.WriteByte(' ')
+		b.WriteString(call.Input)
+		b.WriteByte(' ')
+		b.WriteString(call.Output)
 	}
+	text := b.String()
 	lower := strings.ToLower(text)
 	if strings.Contains(lower, m.raw) || strings.Contains(lower, m.value) {
 		return true

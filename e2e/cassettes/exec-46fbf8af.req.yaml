@@ -1,7 +1,7 @@
 xrr: "1"
 adapter: exec
 fingerprint: 46fbf8af
-recorded_at: "2026-05-17T16:47:07Z"
+recorded_at: "2026-05-25T09:44:28Z"
 payload:
     argv:
         - git

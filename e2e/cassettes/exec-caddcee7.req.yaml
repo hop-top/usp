@@ -1,7 +1,7 @@
 xrr: "1"
 adapter: exec
 fingerprint: caddcee7
-recorded_at: "2026-05-17T16:46:40Z"
+recorded_at: "2026-05-25T09:44:28Z"
 payload:
     argv:
         - usp
